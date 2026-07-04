@@ -116,8 +116,10 @@ class PreviewWidget(QWidget):
         self._last_playback_wall: float = 0.0
         self._last_displayed_frame: int = -1
         self._frame_timestamps: Optional[List[float]] = None  # per-frame ms offsets
+        self._frame_source_indices: Optional[List[int]] = None  # physical frame indices
         # Trim-aware playback boundary (0 = use full video duration)
         self._playback_end_ms: float = 0.0
+        self._dark_mode = True
 
     # ── public API ──────────────────────────────────────────────────
 
@@ -192,6 +194,10 @@ class PreviewWidget(QWidget):
         self._debug_keyframes = keyframes
         if self._debug_overlay:
             self.update()
+
+    def set_dark_mode(self, dark: bool) -> None:
+        """Sync menu styling with the application theme."""
+        self._dark_mode = dark
 
     def set_recording_mode(self, enabled: bool) -> None:
         """Enable/disable recording overlay (blurred snapshot + indicator)."""
@@ -327,6 +333,7 @@ class PreviewWidget(QWidget):
     def load_video(
         self, path: str, actual_fps: float = 0.0, duration_ms: float = 0.0,
         frame_timestamps: Optional[List[float]] = None,
+        frame_source_indices: Optional[List[int]] = None,
     ) -> float:
         """Load video for playback. Returns duration in ms.
 
@@ -390,8 +397,36 @@ class PreviewWidget(QWidget):
         self._video_duration_ms = duration_ms if duration_ms > 0 else computed_dur
         self._playback_pos_ms = 0.0
         self._frame_timestamps = frame_timestamps
+        if frame_source_indices is not None:
+            self._frame_source_indices = frame_source_indices
+        elif frame_timestamps:
+            self._frame_source_indices = list(range(len(frame_timestamps)))
+        else:
+            self._frame_source_indices = None
         self.seek_to(0)
         return self._video_duration_ms
+
+    def update_timeline(
+        self,
+        duration_ms: float,
+        frame_timestamps: Optional[List[float]] = None,
+        frame_source_indices: Optional[List[int]] = None,
+    ) -> None:
+        """Refresh duration and per-frame mapping after ripple edits."""
+        if duration_ms > 0:
+            self._video_duration_ms = duration_ms
+        if frame_timestamps is not None:
+            self._frame_timestamps = frame_timestamps
+        if frame_source_indices is not None:
+            self._frame_source_indices = frame_source_indices
+        elif frame_timestamps is not None:
+            self._frame_source_indices = list(range(len(frame_timestamps)))
+
+        eff_end = self._playback_end_ms if self._playback_end_ms > 0 else self._video_duration_ms
+        if self._playback_pos_ms > eff_end:
+            self.seek_to(eff_end)
+        elif self._video_cap and self._video_cap.isOpened():
+            self.seek_to(self._playback_pos_ms)
 
     def _time_to_frame(self, time_ms: float) -> int:
         """Map a playback time (ms) to the correct video frame index.
@@ -401,8 +436,11 @@ class PreviewWidget(QWidget):
         the uniform ``time * fps / 1000`` mapping.
         """
         if self._frame_timestamps:
-            idx = bisect.bisect_right(self._frame_timestamps, time_ms) - 1
-            return max(0, idx)
+            list_idx = bisect.bisect_right(self._frame_timestamps, time_ms) - 1
+            list_idx = max(0, list_idx)
+            if self._frame_source_indices:
+                return self._frame_source_indices[list_idx]
+            return list_idx
         return int(time_ms / 1000.0 * self._video_fps)
 
     def seek_to(self, time_ms: float) -> None:
@@ -482,12 +520,7 @@ class PreviewWidget(QWidget):
             return
 
         menu = QMenu(self)
-        menu.setStyleSheet(
-            "QMenu { background: #28263e; color: #e4e4ed; border: 1px solid #3d3a58;"
-            "        border-radius: 6px; padding: 4px 0; }"
-            "QMenu::item { padding: 6px 16px; }"
-            "QMenu::item:selected { background: #8b5cf6; border-radius: 4px; margin: 0 4px; }"
-        )
+        menu.setStyleSheet(T.menu_stylesheet(dark=self._dark_mode))
 
         time_ms = self._current_time_ms
 
@@ -1043,7 +1076,7 @@ class PreviewWidget(QWidget):
             elif "click" in r:
                 return QColor(250, 204, 21, 200)   # yellow
             else:
-                return QColor(168, 85, 247, 200)   # purple (manual/other)
+                return QColor(T.BRAND_R, T.BRAND_G, T.BRAND_B, 200)   # brand blue (manual/other)
 
         font = QFont()
         font.setPixelSize(11)
@@ -1172,7 +1205,7 @@ class PreviewWidget(QWidget):
         by = 10.0
         pill = QRectF(bx, by, tw, th)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(139, 92, 246, 220))  # purple, semi-opaque
+        painter.setBrush(QColor(T.BRAND_R, T.BRAND_G, T.BRAND_B, 220))
         painter.drawRoundedRect(pill, th / 2, th / 2)
         painter.setPen(QColor(255, 255, 255))
         painter.drawText(pill, Qt.AlignmentFlag.AlignCenter, banner_text)

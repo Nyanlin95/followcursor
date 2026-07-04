@@ -81,15 +81,19 @@ STROKE_2: str = "#525252"            # grey[32] — dividers, secondary borders
 STROKE_SUBTLE: str = "#0a0a0a"       # grey[4] — very subtle dividers
 
 # ── Brand / Accent ─────────────────────────────────────────────────────
-# FollowCursor brand color (purple) — kept from original design
+# Electric blue accent — design.md §8 (creator tool, high-contrast dark UI)
 # In Fluent 2 terms: colorBrandBackground / colorBrandForeground
-BRAND: str = "#8b5cf6"                                # primary accent (rest)
-BRAND_HOVER: str = "#9d74f7"                           # hover
-BRAND_ACTIVE: str = "#7c3aed"                          # pressed / active
-BRAND_TRANSLUCENT: str = "rgba(139, 92, 246, 0.18)"   # tinted surface (background2)
-BRAND_TRANSLUCENT_HOVER: str = "rgba(139, 92, 246, 0.25)"
-BRAND_TRANSLUCENT_STRONG: str = "rgba(139, 92, 246, 0.28)"
-BRAND_DISABLED: str = "#4c3d7a"                        # disabled brand bg
+BRAND: str = "#3b82f6"                                # primary accent (rest)
+BRAND_HOVER: str = "#60a5fa"                           # hover
+BRAND_ACTIVE: str = "#2563eb"                          # pressed / active
+BRAND_LIGHT: str = "#93c5fd"                            # borders, secondary emphasis
+BRAND_TRANSLUCENT: str = "rgba(59, 130, 246, 0.18)"   # tinted surface (background2)
+BRAND_TRANSLUCENT_HOVER: str = "rgba(59, 130, 246, 0.25)"
+BRAND_TRANSLUCENT_STRONG: str = "rgba(59, 130, 246, 0.28)"
+BRAND_DISABLED: str = "#1e3a5f"                        # disabled brand bg
+BRAND_R: int = 59
+BRAND_G: int = 130
+BRAND_B: int = 246
 
 # ── Fluent 2 Semantic Status Colors ───────────────────────────────────
 # Success (green ramp) — colorStatusSuccess*
@@ -316,11 +320,11 @@ LIGHT_FG_4: str = "#707070"        # colorNeutralForeground4 — quaternary
 LIGHT_STROKE_1: str = "#d1d1d1"    # colorNeutralStroke1 — default borders
 LIGHT_STROKE_2: str = "#e0e0e0"    # colorNeutralStroke2 — dividers
 LIGHT_STROKE_ACCESSIBLE: str = "#616161"  # colorNeutralStrokeAccessible (3:1 contrast)
-# Brand tokens — keep the original FollowCursor purple, adjusted for light backgrounds
-LIGHT_BRAND_FG: str = "#6d28d9"            # violet-700 — legible on white (colorBrandForeground1)
-LIGHT_BRAND_BG: str = "#8b5cf6"            # violet-500 — same primary brand as dark theme
-LIGHT_BRAND_BG_HOVER: str = "#7c3aed"      # violet-600 — darker for hover on light surface
-LIGHT_BRAND_BG_PRESSED: str = "#6d28d9"    # violet-700 — pressed / active state
+# Brand tokens — electric blue, adjusted for light backgrounds
+LIGHT_BRAND_FG: str = "#1d4ed8"            # blue-700 — legible on white (colorBrandForeground1)
+LIGHT_BRAND_BG: str = "#3b82f6"            # blue-500 — same primary brand as dark theme
+LIGHT_BRAND_BG_HOVER: str = "#2563eb"      # blue-600 — darker for hover on light surface
+LIGHT_BRAND_BG_PRESSED: str = "#1d4ed8"    # blue-700 — pressed / active state
 
 # Light theme subtle interactive states
 LIGHT_BG_SUBTLE: str = "transparent"       # colorSubtleBackground rest (same as dark)
@@ -328,13 +332,13 @@ LIGHT_BG_SUBTLE_HOVER: str = "#f5f5f5"     # subtle hover
 LIGHT_BG_SUBTLE_PRESSED: str = "#ebebeb"   # subtle pressed
 LIGHT_BG_CARD_HOVER: str = "#f0f0f0"       # card hover
 
-# Light theme brand translucent surfaces (Issue #112)
-LIGHT_BRAND_TRANSLUCENT: str = "rgba(139, 92, 246, 0.10)"       # tinted brand surface
-LIGHT_BRAND_TRANSLUCENT_HOVER: str = "rgba(139, 92, 246, 0.15)" # tinted brand hover
-LIGHT_BRAND_TRANSLUCENT_STRONG: str = "rgba(139, 92, 246, 0.20)" # tinted brand strong
+# Light theme brand translucent surfaces
+LIGHT_BRAND_TRANSLUCENT: str = "rgba(59, 130, 246, 0.10)"       # tinted brand surface
+LIGHT_BRAND_TRANSLUCENT_HOVER: str = "rgba(59, 130, 246, 0.15)" # tinted brand hover
+LIGHT_BRAND_TRANSLUCENT_STRONG: str = "rgba(59, 130, 246, 0.20)" # tinted brand strong
 
 # Light theme focus ring
-LIGHT_FOCUS_RING: str = "#8b5cf6"          # same brand purple; legible on light backgrounds
+LIGHT_FOCUS_RING: str = "#3b82f6"          # same brand blue; legible on light backgrounds
 
 
 # ── Theme-Aware Color Getters ─────────────────────────────────────────────
@@ -370,45 +374,218 @@ def fg_dim(dark: bool = True) -> str:
     return FG_4 if dark else LIGHT_FG_4
 
 
+def menu_stylesheet(dark: bool = True) -> str:
+    """Return a context-menu stylesheet for the current theme."""
+    if dark:
+        return (
+            f"QMenu {{ background: {BG_LAYER_4}; color: {FG_PRIMARY};"
+            f"        border: 1px solid {STROKE_1}; border-radius: {RADIUS_MEDIUM}px;"
+            f"        padding: {SPACE_XS}px 0; }}"
+            f"QMenu::item {{ padding: {SPACE_6}px {SPACE_LG}px; }}"
+            f"QMenu::item:selected {{ background: {BRAND}; color: white;"
+            f"        border-radius: {RADIUS_SMALL}px; margin: 0 {SPACE_XS}px; }}"
+            f"QMenu::item:disabled {{ color: {FG_3}; }}"
+            f"QMenu::separator {{ height: 1px; background: {STROKE_2};"
+            f"        margin: {SPACE_XS}px {SPACE_SM}px; }}"
+        )
+    return (
+        f"QMenu {{ background: {LIGHT_BG_1}; color: {LIGHT_FG_1};"
+        f"        border: 1px solid {LIGHT_STROKE_1}; border-radius: {RADIUS_MEDIUM}px;"
+        f"        padding: {SPACE_XS}px 0; }}"
+        f"QMenu::item {{ padding: {SPACE_6}px {SPACE_LG}px; }}"
+        f"QMenu::item:selected {{ background: {BRAND}; color: white;"
+        f"        border-radius: {RADIUS_SMALL}px; margin: 0 {SPACE_XS}px; }}"
+        f"QMenu::item:disabled {{ color: {LIGHT_FG_4}; }}"
+        f"QMenu::separator {{ height: 1px; background: {LIGHT_STROKE_2};"
+        f"        margin: {SPACE_XS}px {SPACE_SM}px; }}"
+    )
+
+
+def form_dialog_stylesheet(dark: bool = True) -> str:
+    """Return stylesheet for custom form dialogs (voiceover, settings)."""
+    if dark:
+        return f"""
+            QWidget, QDialog {{
+                background: {BG_LAYER_3};
+                color: {FG_PRIMARY};
+            }}
+            QLabel {{
+                color: {FG_PRIMARY};
+                background: transparent;
+            }}
+            QLabel#Muted {{
+                color: {FG_2};
+            }}
+            QTextEdit, QLineEdit, QComboBox {{
+                background: {BG_LAYER_2};
+                color: {FG_PRIMARY};
+                border: 1px solid {STROKE_1};
+                border-radius: {RADIUS_SMALL}px;
+                padding: {SPACE_6}px;
+                font-size: {FONT_SIZE_BODY_1}px;
+            }}
+            QPushButton {{
+                min-width: 80px;
+                min-height: 28px;
+                background: {BG_LAYER_3};
+                color: {FG_PRIMARY};
+                border: 1px solid {STROKE_1};
+                border-radius: {RADIUS_SMALL}px;
+                padding: {SPACE_XS}px {SPACE_LG}px;
+                font-size: {FONT_SIZE_BODY_1}px;
+            }}
+            QPushButton:hover {{
+                background: {BG_LAYER_4};
+                border-color: {STROKE_ACCESSIBLE};
+            }}
+            QPushButton#Primary {{
+                background: {BRAND};
+                border: none;
+                color: white;
+                font-weight: {FONT_WEIGHT_SEMIBOLD};
+            }}
+            QPushButton#Primary:hover {{
+                background: {BRAND_HOVER};
+            }}
+            QPushButton#Danger {{
+                background: {DANGER_BG_2};
+                border: 1px solid {DANGER};
+                color: {DANGER_FG};
+            }}
+            QPushButton#Danger:hover {{
+                background: {DANGER_BG_1};
+            }}
+            QProgressBar {{
+                background: {BG_LAYER_2};
+                border: none;
+                border-radius: 2px;
+            }}
+            QProgressBar::chunk {{
+                background: {BRAND};
+                border-radius: 2px;
+            }}
+            QSlider::groove:horizontal {{
+                background: {BG_LAYER_2};
+                height: 4px;
+                border-radius: 2px;
+            }}
+            QSlider::handle:horizontal {{
+                background: {BRAND};
+                width: 14px;
+                margin: -5px 0;
+                border-radius: 7px;
+            }}
+        """
+    return f"""
+        QWidget, QDialog {{
+            background: {LIGHT_BG_1};
+            color: {LIGHT_FG_1};
+        }}
+        QLabel {{
+            color: {LIGHT_FG_1};
+            background: transparent;
+        }}
+        QLabel#Muted {{
+            color: {LIGHT_FG_2};
+        }}
+        QTextEdit, QLineEdit, QComboBox {{
+            background: {LIGHT_BG_3};
+            color: {LIGHT_FG_1};
+            border: 1px solid {LIGHT_STROKE_1};
+            border-radius: {RADIUS_SMALL}px;
+            padding: {SPACE_6}px;
+            font-size: {FONT_SIZE_BODY_1}px;
+        }}
+        QPushButton {{
+            min-width: 80px;
+            min-height: 28px;
+            background: {LIGHT_BG_3};
+            color: {LIGHT_FG_1};
+            border: 1px solid {LIGHT_STROKE_1};
+            border-radius: {RADIUS_SMALL}px;
+            padding: {SPACE_XS}px {SPACE_LG}px;
+            font-size: {FONT_SIZE_BODY_1}px;
+        }}
+        QPushButton:hover {{
+            background: {LIGHT_BG_4};
+            border-color: {LIGHT_STROKE_ACCESSIBLE};
+        }}
+        QPushButton#Primary {{
+            background: {LIGHT_BRAND_BG};
+            border: none;
+            color: white;
+            font-weight: {FONT_WEIGHT_SEMIBOLD};
+        }}
+        QPushButton#Primary:hover {{
+            background: {LIGHT_BRAND_BG_HOVER};
+        }}
+        QPushButton#Danger {{
+            background: {DANGER_BG_1};
+            border: 1px solid {DANGER};
+            color: {DANGER_FG};
+        }}
+        QProgressBar {{
+            background: {LIGHT_BG_3};
+            border: none;
+            border-radius: 2px;
+        }}
+        QProgressBar::chunk {{
+            background: {LIGHT_BRAND_BG};
+            border-radius: 2px;
+        }}
+        QSlider::groove:horizontal {{
+            background: {LIGHT_BG_3};
+            height: 4px;
+            border-radius: 2px;
+        }}
+        QSlider::handle:horizontal {{
+            background: {LIGHT_BRAND_BG};
+            width: 14px;
+            margin: -5px 0;
+            border-radius: 7px;
+        }}
+    """
+
+
 def dialog_stylesheet(dark: bool = True) -> str:
     """Return QMessageBox stylesheet for the current theme.
-    
+
     Use this for all modal dialogs to ensure consistent theming.
     """
     if dark:
-        return """
-            QMessageBox {
-                background-color: #1a1829;
-                color: #e4e4ed;
-            }
-            QMessageBox QLabel {
-                color: #e4e4ed;
-                font-size: 13px;
-            }
-            QPushButton {
+        return f"""
+            QMessageBox {{
+                background-color: {BG_LAYER_3};
+                color: {FG_PRIMARY};
+            }}
+            QMessageBox QLabel {{
+                color: {FG_PRIMARY};
+                font-size: {FONT_SIZE_BODY_1}px;
+            }}
+            QPushButton {{
                 height: 32px;
                 min-width: 80px;
                 padding: 0 18px;
-                border-radius: 6px;
-                border: 1px solid #3d3b55;
-                background-color: #28263e;
-                color: #e4e4ed;
-                font-size: 13px;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background-color: #353350;
-                border-color: #4e4c68;
-            }
-            QPushButton:default {
-                background-color: #8b5cf6;
+                border-radius: {RADIUS_SMALL}px;
+                border: 1px solid {STROKE_1};
+                background-color: {BG_LAYER_3};
+                color: {FG_PRIMARY};
+                font-size: {FONT_SIZE_BODY_1}px;
+                font-weight: {FONT_WEIGHT_MEDIUM};
+            }}
+            QPushButton:hover {{
+                background-color: {BG_LAYER_4};
+                border-color: {STROKE_ACCESSIBLE};
+            }}
+            QPushButton:default {{
+                background-color: {BRAND};
                 border: none;
                 color: white;
-                font-weight: 600;
-            }
-            QPushButton:default:hover {
-                background-color: #9d74f7;
-            }
+                font-weight: {FONT_WEIGHT_SEMIBOLD};
+            }}
+            QPushButton:default:hover {{
+                background-color: {BRAND_HOVER};
+            }}
         """
     else:
         return f"""

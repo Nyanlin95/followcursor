@@ -64,18 +64,31 @@ class TitleBar(QWidget):
 
         layout.addSpacing(8)
 
+        self._actions_host = QWidget()
+        self._actions_host.setFixedWidth(252)
+        actions_layout = QHBoxLayout(self._actions_host)
+        actions_layout.setContentsMargins(0, 0, 0, 0)
+        actions_layout.setSpacing(8)
+
         self._btn_export = QPushButton("  Export")
         self._btn_export.setIcon(load_icon("arrow_upload", color=T.FG_PRIMARY))
         self._btn_export.setObjectName("ExportBtn")
         self._btn_export.clicked.connect(self.export_clicked.emit)
-        layout.addWidget(self._btn_export)
+        actions_layout.addWidget(self._btn_export)
 
         self._btn_discard = QPushButton("  Discard")
         self._btn_discard.setIcon(load_icon("delete", color=T.DANGER_TEXT))
         self._btn_discard.setObjectName("DiscardBtn")
         self._btn_discard.clicked.connect(self.discard_clicked.emit)
         self._btn_discard.setVisible(False)
-        layout.addWidget(self._btn_discard)
+        actions_layout.addWidget(self._btn_discard)
+
+        self._discard_spacer = QWidget()
+        self._discard_spacer.setFixedWidth(88)
+        self._discard_spacer.setVisible(True)
+        actions_layout.addWidget(self._discard_spacer)
+
+        layout.addWidget(self._actions_host)
 
         # Fluent 2 — keyboard focus glow on action buttons
         install_focus_ring(self._btn_export)
@@ -113,11 +126,14 @@ class TitleBar(QWidget):
 
     def set_export_text(self, text: str) -> None:
         """Update the export button label (e.g. during export progress)."""
+        if not text.startswith("  "):
+            text = f"  {text.lstrip()}"
         self._btn_export.setText(text)
 
     def set_discard_visible(self, visible: bool) -> None:
-        """Show or hide the discard button."""
+        """Show or hide the discard button without shifting the export button."""
         self._btn_discard.setVisible(visible)
+        self._discard_spacer.setVisible(not visible)
 
     def set_title(self, project_name: str = "", unsaved: bool = False) -> None:
         """Update the title bar text to show the current project name."""

@@ -4,6 +4,8 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QPainter, QColor, QFont
 from PySide6.QtWidgets import QWidget
 
+from .. import tokens as T
+
 
 class CountdownOverlay(QWidget):
     """Full-window translucent overlay that counts 3 → 2 → 1 then emits finished."""
@@ -41,7 +43,9 @@ class CountdownOverlay(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         # dark overlay
-        painter.fillRect(self.rect(), QColor(19, 18, 33, 200))
+        overlay = QColor(T.BG_LAYER_1)
+        overlay.setAlpha(200)
+        painter.fillRect(self.rect(), overlay)
 
         # countdown number
         font = QFont()
@@ -63,7 +67,7 @@ class CountdownOverlay(QWidget):
         for r in range(80, 40, -5):
             alpha = int(30 * (80 - r) / 40)
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(139, 92, 246, alpha))
+            painter.setBrush(QColor(T.BRAND_R, T.BRAND_G, T.BRAND_B, alpha))
             painter.drawEllipse(cx - r, cy - r - 20, r * 2, r * 2)
 
         # text
@@ -75,7 +79,7 @@ class CountdownOverlay(QWidget):
         sub_font.setFamily("Segoe UI Variable")
         sub_font.setPixelSize(18)
         painter.setFont(sub_font)
-        painter.setPen(QColor(136, 134, 160))
+        painter.setPen(QColor(T.FG_2))
         sub = "Recording starts…"
         sw = painter.fontMetrics().horizontalAdvance(sub)
         painter.drawText((self.width() - sw) // 2, y + 50, sub)

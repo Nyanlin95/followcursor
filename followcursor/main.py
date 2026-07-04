@@ -7,12 +7,13 @@ import tempfile
 from logging.handlers import RotatingFileHandler
 
 from PySide6.QtCore import QAbstractNativeEventFilter, QtMsgType, qInstallMessageHandler
-from PySide6.QtGui import QColor, QIcon, QPalette
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from app.icon import create_app_icon, get_ico_path
 from app.main_window import MainWindow
 from app.splash_screen import finish_startup_splash, show_startup_splash
+from app.theme import get_base_palette
 from app.version import __version__
 
 # ── Log file path ───────────────────────────────────────────────────
@@ -123,18 +124,8 @@ def main() -> None:
     icon = create_app_icon()
     app.setWindowIcon(icon)
 
-    # dark palette base (QSS handles the rest)
-    palette = QPalette()
-    palette.setColor(QPalette.ColorRole.Window, QColor("#1b1a2e"))
-    palette.setColor(QPalette.ColorRole.WindowText, QColor("#e4e4ed"))
-    palette.setColor(QPalette.ColorRole.Base, QColor("#131221"))
-    palette.setColor(QPalette.ColorRole.AlternateBase, QColor("#201f34"))
-    palette.setColor(QPalette.ColorRole.Text, QColor("#e4e4ed"))
-    palette.setColor(QPalette.ColorRole.Button, QColor("#28263e"))
-    palette.setColor(QPalette.ColorRole.ButtonText, QColor("#e4e4ed"))
-    palette.setColor(QPalette.ColorRole.Highlight, QColor("#8b5cf6"))
-    palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))
-    app.setPalette(palette)
+    # Base palette before MainWindow applies the full theme QSS
+    app.setPalette(get_base_palette(dark=True))
 
     splash = show_startup_splash(app, icon, __version__)
     try:

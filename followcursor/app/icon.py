@@ -98,8 +98,8 @@ def _render(size: int) -> QPixmap:
 
     # ── background circle with gradient ──────────────────────────
     bg_grad = QLinearGradient(0, 0, s, s)
-    bg_grad.setColorAt(0.0, QColor("#7c3aed"))   # purple-600
-    bg_grad.setColorAt(1.0, QColor("#4f46e5"))   # indigo-600
+    bg_grad.setColorAt(0.0, QColor("#2563eb"))   # blue-600
+    bg_grad.setColorAt(1.0, QColor("#1d4ed8"))   # blue-700
     p.setPen(Qt.PenStyle.NoPen)
     p.setBrush(bg_grad)
     r = s * 0.46
@@ -107,8 +107,8 @@ def _render(size: int) -> QPixmap:
 
     # ── subtle glow ring ─────────────────────────────────────────
     glow = QRadialGradient(QPointF(cx, cy), r * 1.15)
-    glow.setColorAt(0.75, QColor(139, 92, 246, 0))
-    glow.setColorAt(1.0, QColor(139, 92, 246, 60))
+    glow.setColorAt(0.75, QColor(59, 130, 246, 0))
+    glow.setColorAt(1.0, QColor(59, 130, 246, 60))
     p.setBrush(glow)
     p.drawEllipse(QPointF(cx, cy), r * 1.15, r * 1.15)
 

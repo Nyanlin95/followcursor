@@ -66,7 +66,7 @@ def _build_light_theme() -> str:
         # BRAND_HOVER must precede BRAND to avoid matching the shared prefix.
         ("BRAND_HOVER",   T.BRAND_HOVER,   T.LIGHT_BRAND_BG_HOVER),
         ("BRAND_ACTIVE",  T.BRAND_ACTIVE,  T.LIGHT_BRAND_BG_PRESSED),
-        # LIGHT_BRAND_BG == BRAND == "#8b5cf6" (purple preserved in light mode),
+        # LIGHT_BRAND_BG == BRAND == electric blue (same value in both themes),
         # so this substitution is a no-op and is included only for clarity.
         ("BRAND",         T.BRAND,         T.LIGHT_BRAND_BG),
     ]
@@ -121,12 +121,10 @@ QPushButton:disabled {{
     color: {T.FG_DISABLED};
     border-color: {T.STROKE_2};
 }}
-/* Focus ring — Fluent 2 spec: 2px brand outline, 2px offset
-   NOTE: Qt QSS doesn't support outline/outline-offset reliably.
-   Using border instead, with padding adjustment to prevent size shift. */
+/* Focus — keyboard ring is drawn by install_focus_ring(); avoid border/padding
+   changes here because they shift layout and fight named button styles. */
 QPushButton:focus {{
-    border: 2px solid {T.BRAND};
-    padding: {T.SPACE_XS - 1}px {T.SPACE_SM - 1}px;
+    outline: none;
 }}
 
 /* ══════════════════════════════════════════════════════════════
@@ -530,8 +528,8 @@ QToolTip {{
 #TitleBar {{
     background-color: {T.BG_LAYER_1};
     border-bottom: 1px solid {T.STROKE_2};
-    min-height: 48px;
-    max-height: 48px;
+    min-height: 46px;
+    max-height: 46px;
 }}
 #TitleBarLogo {{
     color: {T.FG_PRIMARY};
@@ -568,9 +566,24 @@ QToolTip {{
     background-color: {T.CLOSE_HOVER_BG};
     color: white;
 }}
+#ThemeToggleBtn {{
+    background: transparent;
+    color: {T.FG_2};
+    border: none;
+    border-radius: {T.RADIUS_SMALL}px;
+    min-width: 32px; max-width: 32px;
+    min-height: 32px; max-height: 32px;
+    padding: 0;
+}}
+#ThemeToggleBtn:hover {{
+    background-color: {T.BG_SUBTLE_HOVER};
+    color: {T.FG_PRIMARY};
+}}
 /* Primary button — Export */
 #ExportBtn {{
     height: 32px;
+    min-width: 156px;
+    max-width: 156px;
     padding: 0 {T.SPACE_LG}px;
     border-radius: {T.RADIUS_SMALL}px;
     background-color: {T.BRAND};
@@ -592,7 +605,9 @@ QToolTip {{
 /* Subtle button with danger color — Discard */
 #DiscardBtn {{
     height: 32px;
-    padding: 0 {T.SPACE_LG}px;
+    min-width: 88px;
+    max-width: 88px;
+    padding: 0 {T.SPACE_MD}px;
     border-radius: {T.RADIUS_SMALL}px;
     background-color: transparent;
     border: 1px solid {T.STROKE_1};
@@ -659,6 +674,7 @@ QToolTip {{
 /* Secondary appearance control buttons */
 QPushButton#CtrlBtn {{
     height: 36px;
+    min-width: 0;
     padding: 0 {T.SPACE_LG}px;
     border-radius: {T.RADIUS_SMALL}px;
     border: 1px solid {T.STROKE_1};
@@ -690,6 +706,7 @@ QPushButton#RecordBtn {{
     font-size: {T.FONT_SIZE_SUBTITLE_2}px;
     font-weight: {T.FONT_WEIGHT_BOLD};
     min-width: 200px;
+    max-width: 200px;
 }}
 QPushButton#RecordBtn:hover {{
     background-color: {T.DANGER_HOVER};
@@ -699,15 +716,16 @@ QPushButton#RecordBtn:pressed {{
 }}
 /* Secondary button with danger outline — Stop */
 QPushButton#StopBtn {{
-    height: 40px;
-    padding: 0 {T.SPACE_XL}px;
+    height: 48px;
+    padding: 0 {T.SPACE_XXL}px;
     border-radius: {T.RADIUS_MEDIUM}px;
     background-color: transparent;
     border: 2px solid {T.DANGER};
     color: {T.DANGER};
     font-size: {T.FONT_SIZE_BODY_1}px;
     font-weight: {T.FONT_WEIGHT_SEMIBOLD};
-    min-width: 140px;
+    min-width: 200px;
+    max-width: 200px;
 }}
 QPushButton#StopBtn:hover {{
     background-color: {T.DANGER_TRANSLUCENT};
@@ -756,7 +774,7 @@ QPushButton#SaveBtn:disabled {{
     background-color: {T.OVERLAY_BG};
     border: 1px solid {T.STROKE_2};
     border-radius: {T.RADIUS_MEDIUM}px;
-    padding: {T.SPACE_6}px {T.SPACE_MD}px;
+    padding: 0;
 }}
 #RecDot {{
     background-color: {T.DANGER};
@@ -775,15 +793,13 @@ QPushButton#SaveBtn:disabled {{
 #EditorPanel {{
     background-color: {T.BG_LAYER_1};
     border-left: 1px solid {T.STROKE_2};
-    min-width: 280px;
-    max-width: 280px;
+    min-width: 320px;
+    max-width: 320px;
 }}
 #EditorTitle {{
     color: {T.FG_2};
     font-size: {T.FONT_SIZE_CAPTION_1}px;
     font-weight: {T.FONT_WEIGHT_SEMIBOLD};
-    text-transform: uppercase;
-    letter-spacing: 1px;
     background: transparent;
 }}
 /* Keyframe item card */

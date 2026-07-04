@@ -2,8 +2,16 @@
 
 import pytest
 
-from app.zoom_engine import ease_out, smooth_step, speed_at_time, ZoomEngine, MAX_UNDO
-from app.models import ClickEvent, ZoomKeyframe
+from app.zoom_engine import (
+    ease_out,
+    smooth_step,
+    speed_at_time,
+    ZoomEngine,
+    MAX_UNDO,
+    mouse_pan_at_time,
+    clamp_pan_for_zoom,
+)
+from app.models import ClickEvent, MousePosition, ZoomKeyframe
 
 
 # ── ease_out ────────────────────────────────────────────────────────
@@ -396,6 +404,64 @@ class TestPanPointInterpolation:
         assert z1 == pytest.approx(1.8)
         assert z2 == pytest.approx(1.8)
         assert z3 == pytest.approx(1.8)
+
+
+class TestCursorFollow:
+    """While zoomed in, pan should track the recorded cursor between transitions."""
+
+    def test_follows_live_cursor_after_zoom_in(self) -> None:
+        engine = ZoomEngine()
+        engine.add_keyframe(
+            ZoomKeyframe.create(timestamp=1000, zoom=1.5, x=0.2, y=0.2, duration=400)
+        )
+        engine.add_keyframe(
+            ZoomKeyframe.create(timestamp=3500, zoom=1.0, x=0.5, y=0.5, duration=600)
+        )
+        mouse_track = [
+            MousePosition(x=800, y=600, timestamp=2000),
+        ]
+        monitor_rect = {"left": 0, "top": 0, "width": 1600, "height": 900}
+
+        _, px, py = engine.compute_at(
+            2000, mouse_track=mouse_track, monitor_rect=monitor_rect,
+        )
+
+        assert px == pytest.approx(0.5, abs=0.02)
+        assert py == pytest.approx(600 / 900, abs=0.02)
+
+    def test_transition_still_uses_keyframe_path(self) -> None:
+        engine = ZoomEngine()
+        engine.add_keyframe(
+            ZoomKeyframe.create(timestamp=1000, zoom=1.5, x=0.2, y=0.2, duration=400)
+        )
+        mouse_track = [
+            MousePosition(x=1200, y=450, timestamp=1100),
+        ]
+        monitor_rect = {"left": 0, "top": 0, "width": 1600, "height": 900}
+
+        _, px_static, _ = engine.compute_at(1100)
+        _, px_live, _ = engine.compute_at(
+            1100, mouse_track=mouse_track, monitor_rect=monitor_rect,
+        )
+
+        assert px_static == px_live
+        assert px_live != pytest.approx(0.75, abs=0.05)
+
+    def test_mouse_pan_at_time_picks_nearest_sample(self) -> None:
+        mouse_track = [
+            MousePosition(x=100, y=100, timestamp=0),
+            MousePosition(x=300, y=300, timestamp=1000),
+        ]
+        px, py = mouse_pan_at_time(
+            mouse_track, {"left": 0, "top": 0, "width": 1000, "height": 1000}, 400,
+        )
+        assert px == pytest.approx(0.1)
+        assert py == pytest.approx(0.1)
+
+    def test_clamp_pan_for_zoom_keeps_viewport_inside_source(self) -> None:
+        px, py = clamp_pan_for_zoom(0.0, 1.0, 2.0)
+        assert px == pytest.approx(0.25)
+        assert py == pytest.approx(0.75)
 
 
 # ── Video segment undo / redo ──────────────────────────────────────

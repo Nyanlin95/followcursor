@@ -12,6 +12,7 @@ from app.utils import (
     detect_available_encoders,
     GIF_FPS,
     build_gif_args,
+    ripple_delete_frame_timestamps,
 )
 
 # ── fmt_time ────────────────────────────────────────────────────────
@@ -202,3 +203,26 @@ class TestGifExport:
         args = build_gif_args()
         vf = args[args.index("-vf") + 1]
         assert "paletteuse" in vf
+
+
+class TestRippleDeleteFrameTimestamps:
+    def test_preserves_physical_frame_indices(self) -> None:
+        timestamps = [0.0, 1000.0, 2000.0, 3000.0, 4000.0]
+        source_indices = [0, 1, 2, 3, 4]
+
+        new_ts, new_idx = ripple_delete_frame_timestamps(
+            timestamps, source_indices, 1000.0, 3000.0,
+        )
+
+        assert new_ts == [0.0, 1000.0, 2000.0]
+        assert new_idx == [0, 3, 4]
+
+    def test_defaults_source_indices_to_positions(self) -> None:
+        timestamps = [0.0, 1000.0, 2000.0, 3000.0]
+
+        new_ts, new_idx = ripple_delete_frame_timestamps(
+            timestamps, None, 1000.0, 2000.0,
+        )
+
+        assert new_ts == [0.0, 1000.0, 2000.0]
+        assert new_idx == [0, 2, 3]

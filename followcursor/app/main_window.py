@@ -54,7 +54,8 @@ from .frames import FRAME_PRESETS
 from .theme import get_theme, get_base_palette
 from .icon_loader import clear_cache as clear_icon_cache
 from .fluent_effects import apply_shadow, install_focus_ring
-from .utils import fmt_time as _fmt_time
+from .utils import fmt_time as _fmt_time, ripple_delete_frame_timestamps
+from .zoom_engine import mouse_pan_at_time
 from .widgets.title_bar import TitleBar
 from .widgets.source_picker import SourcePickerDialog
 from .widgets.preview_widget import PreviewWidget
@@ -386,17 +387,8 @@ class _VoiceoverDialog(QDialog):
         self._init_rate = rate
         self._init_volume = volume
 
-        _DLG_STYLE = (
-            "background: #1b1a2e; color: #e4e4ed;"
-        )
-        _BTN_STYLE = (
-            "QPushButton { min-width: 80px; min-height: 28px;"
-            "  background: #28263e; color: #e4e4ed; border: 1px solid #3d3a58;"
-            "  border-radius: 6px; padding: 4px 16px; font-size: 13px; }"
-            "QPushButton:hover { background: #8b5cf6; }"
-        )
-
-        self.setStyleSheet(_DLG_STYLE)
+        dark = getattr(parent, "_dark_mode", True)
+        self.setStyleSheet(T.form_dialog_stylesheet(dark=dark))
 
         from PySide6.QtWidgets import (
             QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QComboBox, QPushButton,
@@ -422,7 +414,9 @@ class _VoiceoverDialog(QDialog):
         if is_narration and section_label:
             header_label = f"{header_label} · {section_label}"
         header = QLabel(f"{header_label} at <b>{t_str}</b>")
-        header.setStyleSheet("font-size: 15px; color: #e4e4ed;")
+        header.setStyleSheet(
+            f"font-size: {T.FONT_SIZE_SUBTITLE}px; font-weight: {T.FONT_WEIGHT_SEMIBOLD};"
+        )
         layout.addWidget(header)
 
         desc = QLabel(
@@ -430,7 +424,8 @@ class _VoiceoverDialog(QDialog):
             if is_narration
             else "Enter voiceover text and pick a voice."
         )
-        desc.setStyleSheet("font-size: 12px; color: #9c99b6;")
+        desc.setObjectName("Muted")
+        desc.setStyleSheet(f"font-size: {T.FONT_SIZE_CAPTION_1}px;")
         layout.addWidget(desc)
 
         # Text edit
@@ -442,17 +437,13 @@ class _VoiceoverDialog(QDialog):
         )
         self._text_edit.setPlainText(text)
         self._text_edit.setFixedHeight(100)
-        self._text_edit.setStyleSheet(
-            "QTextEdit { background: #201f34; color: #e4e4ed; border: 1px solid #3d3a58;"
-            "  border-radius: 6px; padding: 6px; font-size: 13px; }"
-        )
         layout.addWidget(self._text_edit)
 
         # Voice picker
         voice_row = QHBoxLayout()
         voice_row.setSpacing(8)
         voice_label = QLabel("Voice:")
-        voice_label.setStyleSheet("color: #9c99b6; font-size: 13px;")
+        voice_label.setObjectName("Muted")
         voice_row.addWidget(voice_label)
         self._voice_combo = QComboBox()
         self._voice_combo.setEditable(True)
@@ -464,10 +455,6 @@ class _VoiceoverDialog(QDialog):
             self._voice_combo.addItem("en-US-Ava:DragonHDLatestNeural")
             self._voice_combo.addItem("en-US-Andrew:DragonHDLatestNeural")
         self._voice_combo.setCurrentText(voice)
-        self._voice_combo.setStyleSheet(
-            "QComboBox { background: #28263e; color: #e4e4ed; border: 1px solid #3d3a58;"
-            "  border-radius: 6px; padding: 4px 8px; font-size: 13px; }"
-        )
         voice_row.addWidget(self._voice_combo, 1)
         layout.addLayout(voice_row)
 
@@ -476,19 +463,16 @@ class _VoiceoverDialog(QDialog):
         rate_row = QHBoxLayout()
         rate_row.setSpacing(8)
         rate_label = QLabel("Rate:")
-        rate_label.setStyleSheet("color: #9c99b6; font-size: 13px;")
+        rate_label.setObjectName("Muted")
         rate_row.addWidget(rate_label)
         self._rate_slider = QSlider(Qt.Orientation.Horizontal)
         self._rate_slider.setRange(0, 300)  # 0.0x to 3.0x (in hundredths)
         self._rate_slider.setValue(int(getattr(self, '_init_rate', 1.0) * 100))
-        self._rate_slider.setStyleSheet(
-            "QSlider::groove:horizontal { background: #201f34; height: 4px; border-radius: 2px; }"
-            "QSlider::handle:horizontal { background: #8b5cf6; width: 14px; margin: -5px 0; border-radius: 7px; }"
-        )
         rate_row.addWidget(self._rate_slider, 1)
         self._rate_value = QLabel(f"{self._rate_slider.value() / 100:.1f}x")
         self._rate_value.setFixedWidth(36)
-        self._rate_value.setStyleSheet("color: #9c99b6; font-size: 12px;")
+        self._rate_value.setObjectName("Muted")
+        self._rate_value.setStyleSheet(f"font-size: {T.FONT_SIZE_CAPTION_1}px;")
         self._rate_slider.valueChanged.connect(lambda v: self._rate_value.setText(f"{v / 100:.1f}x"))
         rate_row.addWidget(self._rate_value)
         layout.addLayout(rate_row)
@@ -497,26 +481,24 @@ class _VoiceoverDialog(QDialog):
         vol_row = QHBoxLayout()
         vol_row.setSpacing(8)
         vol_label = QLabel("Volume:")
-        vol_label.setStyleSheet("color: #9c99b6; font-size: 13px;")
+        vol_label.setObjectName("Muted")
         vol_row.addWidget(vol_label)
         self._vol_slider = QSlider(Qt.Orientation.Horizontal)
         self._vol_slider.setRange(0, 300)  # 0.0x to 3.0x (in hundredths)
         self._vol_slider.setValue(int(getattr(self, '_init_volume', 1.0) * 100))
-        self._vol_slider.setStyleSheet(
-            "QSlider::groove:horizontal { background: #201f34; height: 4px; border-radius: 2px; }"
-            "QSlider::handle:horizontal { background: #8b5cf6; width: 14px; margin: -5px 0; border-radius: 7px; }"
-        )
         vol_row.addWidget(self._vol_slider, 1)
         self._vol_value = QLabel(f"{self._vol_slider.value() / 100:.1f}x")
         self._vol_value.setFixedWidth(36)
-        self._vol_value.setStyleSheet("color: #9c99b6; font-size: 12px;")
+        self._vol_value.setObjectName("Muted")
+        self._vol_value.setStyleSheet(f"font-size: {T.FONT_SIZE_CAPTION_1}px;")
         self._vol_slider.valueChanged.connect(lambda v: self._vol_value.setText(f"{v / 100:.1f}x"))
         vol_row.addWidget(self._vol_value)
         layout.addLayout(vol_row)
 
         # Status label + progress bar (for preview feedback)
         self._status_label = QLabel("")
-        self._status_label.setStyleSheet("color: #9c99b6; font-size: 12px;")
+        self._status_label.setObjectName("Muted")
+        self._status_label.setStyleSheet(f"font-size: {T.FONT_SIZE_CAPTION_1}px;")
         self._status_label.setVisible(False)
         layout.addWidget(self._status_label)
 
@@ -525,10 +507,6 @@ class _VoiceoverDialog(QDialog):
         self._progress.setRange(0, 0)  # indeterminate
         self._progress.setFixedHeight(4)
         self._progress.setTextVisible(False)
-        self._progress.setStyleSheet(
-            "QProgressBar { background: #201f34; border: none; border-radius: 2px; }"
-            "QProgressBar::chunk { background: #8b5cf6; border-radius: 2px; }"
-        )
         self._progress.setVisible(False)
         layout.addWidget(self._progress)
 
@@ -538,27 +516,21 @@ class _VoiceoverDialog(QDialog):
         btn_row.addStretch()
 
         self._preview_btn = QPushButton("\u25b6 Preview")
-        self._preview_btn.setStyleSheet(_BTN_STYLE)
         self._preview_btn.clicked.connect(self._on_preview)
         btn_row.addWidget(self._preview_btn)
 
         if is_edit:
             btn_delete = QPushButton("Delete")
-            btn_delete.setStyleSheet(
-                _BTN_STYLE.replace("#28263e", "#7f1d1d").replace("#3d3a58", "#991b1b")
-            )
+            btn_delete.setObjectName("Danger")
             btn_delete.clicked.connect(lambda: self._finish(self.RESULT_DELETE))
             btn_row.addWidget(btn_delete)
 
         btn_ok = QPushButton("OK")
-        btn_ok.setStyleSheet(
-            _BTN_STYLE.replace("#28263e", "#8b5cf6").replace("#3d3a58", "#7c3aed")
-        )
+        btn_ok.setObjectName("Primary")
         btn_ok.clicked.connect(lambda: self._finish(self.RESULT_OK))
         btn_row.addWidget(btn_ok)
 
         btn_cancel = QPushButton("Cancel")
-        btn_cancel.setStyleSheet(_BTN_STYLE)
         btn_cancel.clicked.connect(lambda: self._finish(0))
         btn_row.addWidget(btn_cancel)
 
@@ -788,6 +760,7 @@ class MainWindow(QMainWindow):
         self._playback_time: float = 0
         self._actual_fps_override: float = 0.0
         self._frame_timestamps: List[float] = []  # per-frame ms offsets
+        self._frame_source_indices: List[int] = []  # physical frame indices
         self._bg_preset = None  # BackgroundPreset, None = default
         self._frame_preset = None  # FramePreset, None = default
         self._click_preset = None  # ClickEffectPreset, None = default
@@ -1080,7 +1053,7 @@ class MainWindow(QMainWindow):
 
         sep = QFrame()
         sep.setFixedSize(40, 1)
-        sep.setStyleSheet("background-color: #2d2b45;")
+        sep.setStyleSheet(f"background-color: {T.STROKE_2};")
 
         self._btn_load = self._make_sidebar_btn(
             load_icon("folder_open", color=T.FG_PRIMARY), "Open"
@@ -1141,7 +1114,10 @@ class MainWindow(QMainWindow):
         layout.setSpacing(14)
         text = QLabel("Click to select a screen")
         text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        text.setStyleSheet("color: #b0aec4; font-size: 15px; font-weight: 500; background: transparent;")
+        text.setStyleSheet(
+            f"color: {T.FG_2}; font-size: {T.FONT_SIZE_SUBTITLE}px;"
+            f"font-weight: {T.FONT_WEIGHT_MEDIUM}; background: transparent;"
+        )
         layout.addWidget(text)
         hint = QLabel("Choose what you want to record")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1155,7 +1131,12 @@ class MainWindow(QMainWindow):
         layout = QHBoxLayout(bar)
         layout.setContentsMargins(20, 4, 20, 4)
         layout.setSpacing(12)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self._ctrl_center = QWidget()
+        center_layout = QHBoxLayout(self._ctrl_center)
+        center_layout.setContentsMargins(0, 0, 0, 0)
+        center_layout.setSpacing(12)
+        center_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self._btn_change_source = QPushButton("  Change Screen")
         self._btn_change_source.setIcon(load_icon("desktop", color=T.FG_PRIMARY))
@@ -1175,9 +1156,18 @@ class MainWindow(QMainWindow):
         self._btn_stop.clicked.connect(self._stop_recording)
         self._btn_stop.setVisible(False)
 
-        layout.addWidget(self._btn_change_source)
-        layout.addWidget(self._btn_record)
-        layout.addWidget(self._btn_stop)
+        self._record_stop_stack = QStackedWidget()
+        self._record_stop_stack.setFixedSize(200, 48)
+        self._record_stop_stack.addWidget(self._btn_record)
+        self._record_stop_stack.addWidget(self._btn_stop)
+        self._record_stop_stack.setCurrentWidget(self._btn_record)
+
+        center_layout.addWidget(self._btn_change_source)
+        center_layout.addWidget(self._record_stop_stack)
+
+        layout.addStretch(1)
+        layout.addWidget(self._ctrl_center)
+        layout.addStretch(1)
 
         # Fluent 2 — keyboard focus glow on control buttons
         for btn in (self._btn_change_source, self._btn_record, self._btn_stop):
@@ -1185,11 +1175,33 @@ class MainWindow(QMainWindow):
 
         return bar
 
+    def _show_record_controls(self, *, source_selected: bool) -> None:
+        """Show record-mode controls with stable button widths."""
+        self._record_stop_stack.setCurrentWidget(self._btn_record)
+        self._btn_record.setVisible(True)
+        self._btn_stop.setVisible(False)
+        self._btn_change_source.setVisible(source_selected)
+        self._btn_record.setEnabled(source_selected)
+
+    def _show_stop_controls(self) -> None:
+        """Show the stop button in the same slot as the record button."""
+        self._record_stop_stack.setCurrentWidget(self._btn_stop)
+        self._btn_record.setVisible(False)
+        self._btn_stop.setVisible(True)
+        self._btn_change_source.setVisible(False)
+
+    def _hide_record_controls(self) -> None:
+        """Hide record-mode controls (edit view or no capture source)."""
+        self._btn_change_source.setVisible(False)
+        self._btn_record.setVisible(False)
+        self._btn_stop.setVisible(False)
+
     def _build_status_bar(self) -> QWidget:
         bar = QWidget()
         bar.setObjectName("StatusBar")
         layout = QHBoxLayout(bar)
         layout.setContentsMargins(12, 0, 12, 0)
+        layout.setSpacing(8)
 
         left = QHBoxLayout()
         left.setSpacing(6)
@@ -1201,7 +1213,9 @@ class MainWindow(QMainWindow):
         self._status_text.setObjectName("StatusLabel")
         self._status_text.setTextFormat(Qt.TextFormat.RichText)
         self._status_text.setOpenExternalLinks(False)
-        left.addWidget(self._status_text)
+        self._status_text.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self._status_text.setMinimumWidth(0)
+        left.addWidget(self._status_text, 1)
         self._btn_clipchamp = QPushButton("  Show in folder")
         self._btn_clipchamp.setIcon(load_icon("folder_open", color=T.FG_PRIMARY))
         self._btn_clipchamp.setObjectName("CtrlBtn")
@@ -1209,21 +1223,22 @@ class MainWindow(QMainWindow):
         self._btn_clipchamp.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_clipchamp.clicked.connect(self._open_in_clipchamp)
         left.addWidget(self._btn_clipchamp)
-        layout.addLayout(left)
-
-        layout.addStretch()
+        layout.addLayout(left, 1)
 
         self._encoder_label = QLabel("")
         self._encoder_label.setObjectName("StatusLabel")
+        self._encoder_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
         layout.addWidget(self._encoder_label)
 
         self._capture_mode_label = QLabel("")
         self._capture_mode_label.setObjectName("StatusLabel")
         self._capture_mode_label.setVisible(False)
+        self._capture_mode_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
         layout.addWidget(self._capture_mode_label)
 
         right = QLabel("Ctrl+Shift+R  Start / Stop Recording")
         right.setObjectName("StatusLabel")
+        right.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
         layout.addWidget(right)
 
         # Fluent 2 — focus ring on status-bar button
@@ -1263,8 +1278,7 @@ class MainWindow(QMainWindow):
 
             self._preview_stack.setCurrentWidget(self._preview)
             self._preview.setVisible(True)
-            self._btn_change_source.setVisible(True)
-            self._btn_record.setVisible(True)
+            self._show_record_controls(source_selected=True)
 
     def _start_recording(self) -> None:
         """Initiate recording: show countdown, then begin capture + tracking."""
@@ -1282,6 +1296,7 @@ class MainWindow(QMainWindow):
             dlg.addButton("Discard", QMessageBox.ButtonRole.DestructiveRole)
             btn_cancel = dlg.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
             dlg.setDefaultButton(btn_cancel)
+            dlg.setStyleSheet(T.dialog_stylesheet(dark=self._dark_mode))
             dlg.exec()
             clicked = dlg.clickedButton()
             if clicked == btn_cancel:
@@ -1292,8 +1307,7 @@ class MainWindow(QMainWindow):
                     return  # user cancelled save dialog
 
         # Show countdown overlay, then start recording
-        self._btn_record.setVisible(False)
-        self._btn_change_source.setVisible(False)
+        self._hide_record_controls()
         self._countdown.setGeometry(self.centralWidget().rect())
         self._countdown.start()
 
@@ -1319,6 +1333,7 @@ class MainWindow(QMainWindow):
         self._key_events = []
         self._click_events = []
         self._frame_timestamps = []
+        self._frame_source_indices = []
         self._rec_duration_ms = 0.0
         self._playback_time = 0.0
         self._actual_fps_override = 0.0
@@ -1362,7 +1377,7 @@ class MainWindow(QMainWindow):
             self._recording = True
             self._dur_timer.start(100)
             self._rec_indicator.setVisible(True)
-            self._btn_stop.setVisible(True)
+            self._show_stop_controls()
             if self._source_type == "monitor" and self._selected_monitor > 0:
                 self._border_overlay.show_on_monitor(self._selected_monitor)
             self._status_dot.setObjectName("StatusDotRecording")
@@ -1386,9 +1401,7 @@ class MainWindow(QMainWindow):
             logger.exception("Failed to start recording")
             self._recording = False
             self._preview.set_recording_mode(False)
-            self._btn_record.setVisible(True)
-            self._btn_change_source.setVisible(True)
-            self._btn_stop.setVisible(False)
+            self._show_record_controls(source_selected=True)
             self._status_text.setOpenExternalLinks(False)
             self._status_text.setText("Recording failed to start")
 
@@ -1416,7 +1429,7 @@ class MainWindow(QMainWindow):
         # ── Restore UI immediately so the user sees the app right away ──
         self._border_overlay.hide_border()
         self._rec_indicator.setVisible(False)
-        self._btn_stop.setVisible(False)
+        self._hide_record_controls()
         self._status_dot.setObjectName("StatusDotReady")
         self._status_dot.style().unpolish(self._status_dot)
         self._status_dot.style().polish(self._status_dot)
@@ -1458,7 +1471,7 @@ class MainWindow(QMainWindow):
         """Called on the GUI thread when the finalize worker finishes."""
         try:
             self._mouse_track = mouse_track
-            self._mouse_track_timestamps = [mp.timestamp for mp in self._mouse_track]
+            self._sync_mouse_track_timestamps()
             if key_events:
                 logger.info(
                     "Ignoring %d captured keystroke event(s) after recording finalization",
@@ -1470,6 +1483,7 @@ class MainWindow(QMainWindow):
             self._zoom_engine.video_segments = self._video_segments
             self._zoom_engine.voiceover_segments = self._voiceover_segments
             self._frame_timestamps = frame_timestamps
+            self._frame_source_indices = list(range(len(frame_timestamps)))
             self._actual_fps_override = actual_fps
 
             # Initialize a single video segment spanning the full recording
@@ -1575,8 +1589,25 @@ class MainWindow(QMainWindow):
                 except OSError:
                     pass
 
+    def _has_capture_source(self) -> bool:
+        """Return True when a monitor or window is selected for recording."""
+        if self._source_type == "window" and self._window_hwnd:
+            return True
+        return self._selected_monitor > 0
+
+    def _has_edit_content(self) -> bool:
+        """Return True when a recording is available for the editor."""
+        return bool(self._video_path) and os.path.isfile(self._video_path)
+
     def _set_view(self, view: str) -> None:
         """Switch between 'record' and 'edit' views, updating sidebar and widgets."""
+        if view not in ("record", "edit"):
+            return
+        if view == "edit" and not self._has_edit_content():
+            self._status_text.setOpenExternalLinks(False)
+            self._status_text.setText("Record or open a project to edit")
+            return
+
         self._view = view
 
         # sidebar highlight
@@ -1596,24 +1627,24 @@ class MainWindow(QMainWindow):
             self._timeline.setVisible(False)
             self._editor.setVisible(False)
             self._title_bar.set_export_enabled(False)
-            if self._selected_monitor:
-                self._btn_record.setVisible(True)
-                self._btn_change_source.setVisible(True)
-            elif self._source_type == "window":
-                self._btn_record.setVisible(True)
-                self._btn_change_source.setVisible(True)
-            # switch back to live capture if a source is selected
-            if not self._recorder.is_capturing:
-                if self._source_type == "window" and self._window_hwnd:
-                    self._recorder.start_capture_window(self._window_hwnd, DEFAULT_FPS)
-                    self._preview_stack.setCurrentWidget(self._preview)
-                elif self._selected_monitor:
-                    self._recorder.start_capture(self._selected_monitor, DEFAULT_FPS)
-                    self._preview_stack.setCurrentWidget(self._preview)
+            self._title_bar.set_discard_visible(False)
+
+            if self._has_capture_source():
+                self._show_record_controls(source_selected=True)
+                self._preview_stack.setCurrentWidget(self._preview)
+                self._preview.setVisible(True)
+                if not self._recorder.is_capturing:
+                    if self._source_type == "window" and self._window_hwnd:
+                        self._recorder.start_capture_window(self._window_hwnd, DEFAULT_FPS)
+                    elif self._selected_monitor:
+                        self._recorder.start_capture(self._selected_monitor, DEFAULT_FPS)
+            else:
+                self._hide_record_controls()
+                self._preview_stack.setCurrentWidget(self._placeholder)
+                self._preview.setVisible(False)
 
         elif view == "edit":
-            self._btn_record.setVisible(False)
-            self._btn_change_source.setVisible(False)
+            self._hide_record_controls()
             self._preview_stack.setCurrentWidget(self._preview)
             self._title_bar.set_export_enabled(bool(self._video_path))
             self._title_bar.set_discard_visible(bool(self._video_path))
@@ -1628,6 +1659,7 @@ class MainWindow(QMainWindow):
                     actual_fps=fps,
                     duration_ms=self._rec_duration_ms if self._rec_duration_ms > 0 else 0,
                     frame_timestamps=self._frame_timestamps or None,
+                    frame_source_indices=self._frame_source_indices or None,
                 )
                 # Fall back to video-based duration when the wall-clock
                 # value is missing (e.g. loaded from project).
@@ -1735,14 +1767,7 @@ class MainWindow(QMainWindow):
             dlg.addButton("Replace", QMessageBox.ButtonRole.AcceptRole)
             btn_cancel = dlg.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
             dlg.setDefaultButton(btn_cancel)
-            dlg.setStyleSheet(
-                "QMessageBox { background: #1b1a2e; }"
-                "QMessageBox QLabel { color: #e4e4ed; font-size: 13px; }"
-                "QPushButton { min-width: 80px; min-height: 28px;"
-                "  background: #28263e; color: #e4e4ed; border: 1px solid #3d3a58;"
-                "  border-radius: 6px; padding: 4px 16px; }"
-                "QPushButton:hover { background: #8b5cf6; }"
-            )
+            dlg.setStyleSheet(T.dialog_stylesheet(dark=self._dark_mode))
             dlg.exec()
             if dlg.clickedButton() == btn_cancel:
                 return
@@ -1756,7 +1781,7 @@ class MainWindow(QMainWindow):
             self._zoom_engine.add_keyframe(kf)
         self._mark_dirty()
         # Update preview at current position
-        self._zoom_engine.update(self._playback_time)
+        self._update_zoom_engine(self._playback_time)
         self._preview.set_zoom(
             self._zoom_engine.current_zoom,
             self._zoom_engine.current_pan_x,
@@ -2016,14 +2041,7 @@ class MainWindow(QMainWindow):
         dlg.addButton("Replace", QMessageBox.ButtonRole.AcceptRole)
         btn_cancel = dlg.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
         dlg.setDefaultButton(btn_cancel)
-        dlg.setStyleSheet(
-            "QMessageBox { background: #1b1a2e; }"
-            "QMessageBox QLabel { color: #e4e4ed; font-size: 13px; }"
-            "QPushButton { min-width: 80px; min-height: 28px;"
-            "  background: #28263e; color: #e4e4ed; border: 1px solid #3d3a58;"
-            "  border-radius: 6px; padding: 4px 16px; }"
-            "QPushButton:hover { background: #8b5cf6; }"
-        )
+        dlg.setStyleSheet(T.dialog_stylesheet(dark=self._dark_mode))
         dlg.exec()
         return dlg.clickedButton() != btn_cancel
 
@@ -2043,14 +2061,7 @@ class MainWindow(QMainWindow):
         btn_accept = dlg.addButton(accept_label, QMessageBox.ButtonRole.AcceptRole)
         btn_cancel = dlg.addButton(cancel_label, QMessageBox.ButtonRole.RejectRole)
         dlg.setDefaultButton(btn_cancel)
-        dlg.setStyleSheet(
-            "QMessageBox { background: #1b1a2e; }"
-            "QMessageBox QLabel { color: #e4e4ed; font-size: 13px; }"
-            "QPushButton { min-width: 80px; min-height: 28px;"
-            "  background: #28263e; color: #e4e4ed; border: 1px solid #3d3a58;"
-            "  border-radius: 6px; padding: 4px 16px; }"
-            "QPushButton:hover { background: #8b5cf6; }"
-        )
+        dlg.setStyleSheet(T.dialog_stylesheet(dark=self._dark_mode))
         dlg.exec()
         return dlg.clickedButton() == btn_accept
 
@@ -2987,7 +2998,7 @@ class MainWindow(QMainWindow):
             self._click_events = self._zoom_engine.click_events
             self._video_segments = self._zoom_engine.video_segments
             self._voiceover_segments = self._zoom_engine.voiceover_segments
-            self._zoom_engine.update(self._playback_time)
+            self._update_zoom_engine(self._playback_time)
             self._preview.set_zoom(
                 self._zoom_engine.current_zoom,
                 self._zoom_engine.current_pan_x,
@@ -3004,7 +3015,7 @@ class MainWindow(QMainWindow):
             self._click_events = self._zoom_engine.click_events
             self._video_segments = self._zoom_engine.video_segments
             self._voiceover_segments = self._zoom_engine.voiceover_segments
-            self._zoom_engine.update(self._playback_time)
+            self._update_zoom_engine(self._playback_time)
             self._preview.set_zoom(
                 self._zoom_engine.current_zoom,
                 self._zoom_engine.current_pan_x,
@@ -3140,33 +3151,24 @@ class MainWindow(QMainWindow):
         self._capture_mode_label.setVisible(True)
         logger.info("Capture backend: %s", backend)
 
+    def _sync_mouse_track_timestamps(self) -> None:
+        """Rebuild the cached timestamp list used for mouse pan lookup."""
+        self._mouse_track_timestamps = [mp.timestamp for mp in self._mouse_track]
+
+    def _update_zoom_engine(self, time_ms: float) -> None:
+        """Evaluate zoom/pan at *time_ms*, following the cursor when zoomed in."""
+        self._zoom_engine.update(
+            time_ms,
+            self._mouse_track,
+            self._monitor_rect,
+        )
+
     # ── zoom helpers ────────────────────────────────────────────────
 
     def _lookup_mouse_pan(self, time_ms: float) -> tuple:
         """Find the recorded mouse position at a given playback time and return
         normalized pan coordinates (0-1).  Falls back to (0.5, 0.5)."""
-        if not self._mouse_track or not self._monitor_rect:
-            return 0.5, 0.5
-        import bisect
-        # Use pre-built timestamp cache for O(log n) lookup without per-call allocation
-        timestamps = self._mouse_track_timestamps
-        idx = bisect.bisect_left(timestamps, time_ms)
-        # Pick the closer of the two surrounding samples
-        if idx == 0:
-            best = self._mouse_track[0]
-        elif idx >= len(self._mouse_track):
-            best = self._mouse_track[-1]
-        else:
-            before = self._mouse_track[idx - 1]
-            after = self._mouse_track[idx]
-            if (time_ms - before.timestamp) <= (after.timestamp - time_ms):
-                best = before
-            else:
-                best = after
-        mon = self._monitor_rect
-        px = (best.x - mon.get("left", 0)) / max(mon.get("width", 1), 1)
-        py = (best.y - mon.get("top", 0)) / max(mon.get("height", 1), 1)
-        return max(0.0, min(1.0, px)), max(0.0, min(1.0, py))
+        return mouse_pan_at_time(self._mouse_track, self._monitor_rect, time_ms)
 
     def _add_keyframe(self, timestamp: float, zoom: float, x: float = -1.0, y: float = -1.0) -> None:
         """Add a zoom keyframe at the given time, with auto zoom-out pairing."""
@@ -3229,14 +3231,14 @@ class MainWindow(QMainWindow):
                 self._zoom_engine.add_keyframe(kf_out)
 
         if self._recording:
-            self._zoom_engine.update(timestamp)
+            self._update_zoom_engine(timestamp)
             self._preview.set_zoom(
                 self._zoom_engine.current_zoom,
                 self._zoom_engine.current_pan_x,
                 self._zoom_engine.current_pan_y,
             )
         if self._view == "edit":
-            self._zoom_engine.update(self._playback_time)
+            self._update_zoom_engine(self._playback_time)
             self._preview.set_zoom(
                 self._zoom_engine.current_zoom,
                 self._zoom_engine.current_pan_x,
@@ -3249,7 +3251,7 @@ class MainWindow(QMainWindow):
         self._zoom_engine.push_undo()
         self._zoom_engine.remove_keyframe(kf_id)
         self._mark_dirty()
-        self._zoom_engine.update(self._playback_time)
+        self._update_zoom_engine(self._playback_time)
         self._preview.set_zoom(
             self._zoom_engine.current_zoom,
             self._zoom_engine.current_pan_x,
@@ -3295,7 +3297,7 @@ class MainWindow(QMainWindow):
         moved_kf.timestamp = new_time_ms
         # Re-sort after timestamp change
         self._zoom_engine.keyframes.sort(key=lambda k: k.timestamp)
-        self._zoom_engine.update(self._playback_time)
+        self._update_zoom_engine(self._playback_time)
         self._preview.set_zoom(
             self._zoom_engine.current_zoom,
             self._zoom_engine.current_pan_x,
@@ -3324,14 +3326,7 @@ class MainWindow(QMainWindow):
             return
 
         menu = QMenu(self)
-        menu.setStyleSheet(
-            "QMenu { background: #28263e; color: #e4e4ed; border: 1px solid #3d3a58;"
-            "        border-radius: 6px; padding: 4px 0; }"
-            "QMenu::item { padding: 6px 16px; }"
-            "QMenu::item:selected { background: #8b5cf6; border-radius: 4px; margin: 0 4px; }"
-            "QMenu::item:disabled { color: #6c6890; }"
-            "QMenu::separator { height: 1px; background: #3d3a58; margin: 4px 8px; }"
-        )
+        menu.setStyleSheet(T.menu_stylesheet(dark=self._dark_mode))
 
         # Section header
         header = menu.addAction("  Zoom  ({:.2f}×)".format(target_kf.zoom))
@@ -3390,7 +3385,7 @@ class MainWindow(QMainWindow):
             if kf.id == kf_id:
                 kf.zoom = new_zoom
                 break
-        self._zoom_engine.update(self._playback_time)
+        self._update_zoom_engine(self._playback_time)
         self._preview.set_zoom(
             self._zoom_engine.current_zoom,
             self._zoom_engine.current_pan_x,
@@ -3450,7 +3445,7 @@ class MainWindow(QMainWindow):
         self._zoom_engine.add_keyframe(pan_kf)
         self._mark_dirty()
 
-        self._zoom_engine.update(self._playback_time)
+        self._update_zoom_engine(self._playback_time)
         self._preview.set_zoom(
             self._zoom_engine.current_zoom,
             self._zoom_engine.current_pan_x,
@@ -3497,14 +3492,7 @@ class MainWindow(QMainWindow):
         )
 
         menu = QMenu(self)
-        menu.setStyleSheet(
-            "QMenu { background: #28263e; color: #e4e4ed; border: 1px solid #3d3a58;"
-            "        border-radius: 6px; padding: 4px 0; }"
-            "QMenu::item { padding: 6px 16px; }"
-            "QMenu::item:selected { background: #8b5cf6; border-radius: 4px; margin: 0 4px; }"
-            "QMenu::item:disabled { color: #6c6890; }"
-            "QMenu::separator { height: 1px; background: #3d3a58; margin: 4px 8px; }"
-        )
+        menu.setStyleSheet(T.menu_stylesheet(dark=self._dark_mode))
 
         header = menu.addAction(f"Pan point {pp_number}")
         header.setEnabled(False)
@@ -3548,7 +3536,7 @@ class MainWindow(QMainWindow):
         if kf_a and kf_b:
             kf_a.timestamp, kf_b.timestamp = kf_b.timestamp, kf_a.timestamp
             self._mark_dirty()
-            self._zoom_engine.update(self._playback_time)
+            self._update_zoom_engine(self._playback_time)
             self._preview.set_zoom(
                 self._zoom_engine.current_zoom,
                 self._zoom_engine.current_pan_x,
@@ -3589,7 +3577,7 @@ class MainWindow(QMainWindow):
         self._zoom_engine.keyframes.sort(key=lambda k: k.timestamp)
 
         self._mark_dirty()
-        self._zoom_engine.update(self._playback_time)
+        self._update_zoom_engine(self._playback_time)
         self._preview.set_zoom(
             self._zoom_engine.current_zoom,
             self._zoom_engine.current_pan_x,
@@ -3620,7 +3608,7 @@ class MainWindow(QMainWindow):
                 kf.y = pan_y
                 break
         self._mark_dirty()
-        self._zoom_engine.update(self._playback_time)
+        self._update_zoom_engine(self._playback_time)
         self._preview.set_zoom(
             self._zoom_engine.current_zoom,
             self._zoom_engine.current_pan_x,
@@ -3654,7 +3642,7 @@ class MainWindow(QMainWindow):
                 kf.y = pan_y
                 self._mark_dirty()
                 break
-        self._zoom_engine.update(self._playback_time)
+        self._update_zoom_engine(self._playback_time)
         self._preview.set_zoom(
             self._zoom_engine.current_zoom,
             self._zoom_engine.current_pan_x,
@@ -3683,7 +3671,7 @@ class MainWindow(QMainWindow):
         for rid in ids_to_remove:
             self._zoom_engine.remove_keyframe(rid)
         self._mark_dirty()
-        self._zoom_engine.update(self._playback_time)
+        self._update_zoom_engine(self._playback_time)
         self._preview.set_zoom(
             self._zoom_engine.current_zoom,
             self._zoom_engine.current_pan_x,
@@ -3737,7 +3725,7 @@ class MainWindow(QMainWindow):
         self._stop_voiceover_audio()
         self._preview.seek_to(time_ms)
         self._preview.set_current_time(time_ms)
-        self._zoom_engine.update(time_ms)
+        self._update_zoom_engine(time_ms)
         self._preview.set_zoom(
             self._zoom_engine.current_zoom,
             self._zoom_engine.current_pan_x,
@@ -3772,7 +3760,7 @@ class MainWindow(QMainWindow):
             elif self._rec_duration_ms > 0:
                 t = min(t, self._rec_duration_ms)
             self._playback_time = t
-            self._zoom_engine.update(t)
+            self._update_zoom_engine(t)
             self._preview.set_zoom(
                 self._zoom_engine.current_zoom,
                 self._zoom_engine.current_pan_x,
@@ -3845,6 +3833,7 @@ class MainWindow(QMainWindow):
                     self._output_dim,
                     duration_ms=self._rec_duration_ms,
                     frame_timestamps=self._frame_timestamps or None,
+                    frame_source_indices=self._frame_source_indices or None,
                     trim_start_ms=self._trim_start_ms,
                     trim_end_ms=self._trim_end_ms,
                     encoder_id=self._editor.encoder_id,
@@ -3854,7 +3843,7 @@ class MainWindow(QMainWindow):
                 )
             except Exception:
                 logger.exception("Failed to start export")
-                self._title_bar.set_export_text("\u2b06  Export")
+                self._title_bar.set_export_text("Export")
                 self._title_bar.set_export_enabled(True)
                 self._status_text.setText("Export failed to start")
 
@@ -3881,40 +3870,7 @@ class MainWindow(QMainWindow):
         btn_discard = dlg.addButton("Discard", QMessageBox.ButtonRole.DestructiveRole)
         btn_cancel = dlg.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
         dlg.setDefaultButton(btn_cancel)
-        dlg.setStyleSheet("""
-            QMessageBox {
-                background-color: #1a1829;
-                color: #e4e4ed;
-            }
-            QMessageBox QLabel {
-                color: #e4e4ed;
-                font-size: 13px;
-            }
-            QPushButton {
-                height: 32px;
-                min-width: 80px;
-                padding: 0 18px;
-                border-radius: 6px;
-                border: 1px solid #3d3b55;
-                background-color: #28263e;
-                color: #e4e4ed;
-                font-size: 13px;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background-color: #353350;
-                border-color: #4e4c68;
-            }
-            QPushButton:default {
-                background-color: #8b5cf6;
-                border: none;
-                color: white;
-                font-weight: 600;
-            }
-            QPushButton:default:hover {
-                background-color: #9d74f7;
-            }
-        """)
+        dlg.setStyleSheet(T.dialog_stylesheet(dark=self._dark_mode))
         dlg.exec()
         clicked = dlg.clickedButton()
         if clicked == btn_cancel:
@@ -4155,6 +4111,10 @@ class MainWindow(QMainWindow):
                 kf.timestamp -= gap
 
         # Retime click events after the deleted region
+        self._click_events = [
+            ce for ce in self._click_events
+            if not (seg.start_ms <= ce.timestamp < seg.end_ms)
+        ]
         for ce in self._click_events:
             if ce.timestamp >= seg.end_ms:
                 ce.timestamp -= gap
@@ -4166,17 +4126,23 @@ class MainWindow(QMainWindow):
                     ke.timestamp -= gap
 
         # Retime mouse track positions after the deleted region
+        self._mouse_track = [
+            mp for mp in self._mouse_track
+            if not (seg.start_ms <= mp.timestamp < seg.end_ms)
+        ]
         for mp in self._mouse_track:
             if mp.timestamp >= seg.end_ms:
                 mp.timestamp -= gap
+        self._sync_mouse_track_timestamps()
 
-        # Retime frame timestamps after the deleted region
+        # Retime frame timestamps while preserving physical frame indices
         if self._frame_timestamps:
-            self._frame_timestamps = [
-                t - gap if t >= seg.end_ms else t
-                for t in self._frame_timestamps
-                if not (seg.start_ms <= t < seg.end_ms)
-            ]
+            self._frame_timestamps, self._frame_source_indices = ripple_delete_frame_timestamps(
+                self._frame_timestamps,
+                self._frame_source_indices or None,
+                seg.start_ms,
+                seg.end_ms,
+            )
 
         # Adjust recording duration
         self._rec_duration_ms -= gap
@@ -4196,6 +4162,16 @@ class MainWindow(QMainWindow):
             self._sync_generated_narration_script()
         self._zoom_engine.video_segments = self._video_segments
         self._zoom_engine.voiceover_segments = self._voiceover_segments
+        self._preview.update_timeline(
+            duration_ms=self._rec_duration_ms,
+            frame_timestamps=self._frame_timestamps or None,
+            frame_source_indices=self._frame_source_indices or None,
+        )
+        self._preview.set_playback_end(self._trim_end_ms or self._rec_duration_ms)
+        self._preview.set_cursor_data(self._mouse_track, self._monitor_rect, self._click_events)
+        if self._playback_time > self._rec_duration_ms:
+            self._playback_time = max(0.0, self._rec_duration_ms - 1)
+            self._preview.set_current_time(self._playback_time)
         self._mark_dirty()
         self._refresh_editor()
         self._status_text.setOpenExternalLinks(False)
@@ -4281,13 +4257,13 @@ class MainWindow(QMainWindow):
         self._title_bar.set_export_text(f"Exporting {int(pct * 100)}%\u2026")
 
     def _on_export_finished(self, path: str) -> None:
-        self._title_bar.set_export_text("\u2b06  Export")
+        self._title_bar.set_export_text("Export")
         self._title_bar.set_export_enabled(True)
         self._last_export_path = path
         name = os.path.basename(path)
         self._status_text.setText(
             f'Saved to <a href="file:///{path.replace(os.sep, "/")}" '
-            f'style="color: #a78bfa; text-decoration: underline;">{name}</a>'
+            f'style="color: {T.BRAND_LIGHT}; text-decoration: underline;">{name}</a>'
         )
         self._status_text.setOpenExternalLinks(True)
         self._btn_clipchamp.setVisible(True)
@@ -4298,7 +4274,7 @@ class MainWindow(QMainWindow):
         self._status_text.setText(msg)
 
     def _on_export_error(self, msg: str) -> None:
-        self._title_bar.set_export_text("\u2b06  Export")
+        self._title_bar.set_export_text("Export")
         self._title_bar.set_export_enabled(True)
         self._status_text.setOpenExternalLinks(False)
         self._status_text.setText(f"Export error: {msg}")
@@ -4336,6 +4312,7 @@ class MainWindow(QMainWindow):
             key_events=None,
             click_events=self._click_events,
             frame_timestamps=self._frame_timestamps or None,
+            frame_source_indices=self._frame_source_indices or None,
             trim_start_ms=self._trim_start_ms,
             trim_end_ms=self._trim_end_ms,
             voiceover_segments=list(self._voiceover_segments) if self._voiceover_segments else None,
@@ -4387,13 +4364,13 @@ class MainWindow(QMainWindow):
 
     def _on_save_done(self, path: str) -> None:
         """Background save finished successfully."""
-        self._title_bar.set_export_text("\u2b06  Export")
+        self._title_bar.set_export_text("Export")
         self._title_bar.set_export_enabled(True)
         self._btn_save.setEnabled(True)
         name = os.path.basename(path)
         self._status_text.setText(
             f'Saved <a href="file:///{path.replace(os.sep, "/")}" '
-            f'style="color: #a78bfa; text-decoration: underline;">{name}</a>'
+            f'style="color: {T.BRAND_LIGHT}; text-decoration: underline;">{name}</a>'
         )
         self._status_text.setOpenExternalLinks(True)
         self._save_worker.deleteLater()
@@ -4401,7 +4378,7 @@ class MainWindow(QMainWindow):
 
     def _on_save_failed(self, error: str) -> None:
         """Background save failed."""
-        self._title_bar.set_export_text("\u2b06  Export")
+        self._title_bar.set_export_text("Export")
         self._title_bar.set_export_enabled(True)
         self._btn_save.setEnabled(True)
         self._unsaved_changes = True
@@ -4442,7 +4419,7 @@ class MainWindow(QMainWindow):
         try:
             session = proj["session"]
             self._mouse_track = session.mouse_track
-            self._mouse_track_timestamps = [mp.timestamp for mp in self._mouse_track]
+            self._sync_mouse_track_timestamps()
             if session.key_events:
                 logger.info(
                     "Ignoring %d legacy keystroke event(s) from the loaded project",
@@ -4465,6 +4442,9 @@ class MainWindow(QMainWindow):
                 self._monitor_rect = proj["monitor_rect"]
             self._actual_fps_override = proj.get("actual_fps", 30.0)
             self._frame_timestamps = session.frame_timestamps or []
+            self._frame_source_indices = list(session.frame_source_indices or [])
+            if self._frame_timestamps and not self._frame_source_indices:
+                self._frame_source_indices = list(range(len(self._frame_timestamps)))
             self._trim_start_ms = session.trim_start_ms
             self._trim_end_ms = session.trim_end_ms
             self._zoom_engine.trim_start_ms = session.trim_start_ms
@@ -4552,40 +4532,7 @@ class MainWindow(QMainWindow):
             dlg.addButton("Don\u2019t Save", QMessageBox.ButtonRole.DestructiveRole)
             btn_cancel = dlg.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
             dlg.setDefaultButton(btn_cancel)
-            dlg.setStyleSheet("""
-                QMessageBox {
-                    background-color: #1a1829;
-                    color: #e4e4ed;
-                }
-                QMessageBox QLabel {
-                    color: #e4e4ed;
-                    font-size: 13px;
-                }
-                QPushButton {
-                    height: 32px;
-                    min-width: 80px;
-                    padding: 0 18px;
-                    border-radius: 6px;
-                    border: 1px solid #3d3b55;
-                    background-color: #28263e;
-                    color: #e4e4ed;
-                    font-size: 13px;
-                    font-weight: 500;
-                }
-                QPushButton:hover {
-                    background-color: #353350;
-                    border-color: #4e4c68;
-                }
-                QPushButton:default {
-                    background-color: #8b5cf6;
-                    border: none;
-                    color: white;
-                    font-weight: 600;
-                }
-                QPushButton:default:hover {
-                    background-color: #9d74f7;
-                }
-            """)
+            dlg.setStyleSheet(T.dialog_stylesheet(dark=self._dark_mode))
             dlg.exec()
             clicked = dlg.clickedButton()
             if clicked == btn_cancel:
@@ -4661,6 +4608,10 @@ class MainWindow(QMainWindow):
         # Propagate theme to custom-painted widgets
         if hasattr(self, "_timeline"):
             self._timeline.set_dark_mode(self._dark_mode)
+        if hasattr(self, "_preview"):
+            self._preview.set_dark_mode(self._dark_mode)
+        if hasattr(self, "_editor"):
+            self._editor.set_dark_mode(self._dark_mode)
         logger.info(f"Applied {'dark' if self._dark_mode else 'light'} theme")
 
     def _refresh_icons(self) -> None:

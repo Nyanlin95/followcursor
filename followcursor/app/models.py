@@ -279,6 +279,7 @@ class RecordingSession:
     key_events: List[KeyEvent] | None = None  # legacy load-only data
     click_events: List[ClickEvent] | None = None
     frame_timestamps: List[float] | None = None
+    frame_source_indices: List[int] | None = None
     trim_start_ms: float = 0.0
     trim_end_ms: float = 0.0  # 0 = no trim (use full duration)
     voiceover_segments: List["VoiceoverSegment"] | None = None
@@ -298,6 +299,8 @@ class RecordingSession:
             data["clickEvents"] = [c.to_dict() for c in self.click_events]
         if self.frame_timestamps:
             data["frameTimestamps"] = self.frame_timestamps
+        if self.frame_source_indices:
+            data["frameSourceIndices"] = self.frame_source_indices
         if self.trim_start_ms > 0:
             data["trimStartMs"] = self.trim_start_ms
         if self.trim_end_ms > 0:
@@ -339,6 +342,7 @@ class RecordingSession:
         if "clickEvents" in d:
             click_events = [ClickEvent.from_dict(c) for c in d["clickEvents"]]
         frame_timestamps = d.get("frameTimestamps")
+        frame_source_indices = d.get("frameSourceIndices")
         voiceover_segments = None
         if "voiceoverSegments" in d:
             voiceover_segments = [VoiceoverSegment.from_dict(v) for v in d["voiceoverSegments"]]
@@ -357,6 +361,7 @@ class RecordingSession:
             key_events=key_events,
             click_events=click_events,
             frame_timestamps=frame_timestamps,
+            frame_source_indices=frame_source_indices,
             trim_start_ms=d.get("trimStartMs", 0.0),
             trim_end_ms=d.get("trimEndMs", 0.0),
             voiceover_segments=voiceover_segments,

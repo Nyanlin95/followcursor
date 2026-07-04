@@ -4,6 +4,8 @@ from PySide6.QtCore import Qt, QTimer, QRectF
 from PySide6.QtGui import QPainter, QColor, QFont, QLinearGradient
 from PySide6.QtWidgets import QWidget
 
+from .. import tokens as T
+
 
 class ProcessingOverlay(QWidget):
     """Full-window translucent overlay with a pulsing 'Finishing recording…' banner."""
@@ -58,7 +60,9 @@ class ProcessingOverlay(QWidget):
         w, h = self.width(), self.height()
 
         # Semi-transparent dark overlay
-        painter.fillRect(self.rect(), QColor(19, 18, 33, 160))
+        overlay = QColor(T.BG_LAYER_1)
+        overlay.setAlpha(160)
+        painter.fillRect(self.rect(), overlay)
 
         # Banner background — centered rounded rectangle with pulsing glow
         banner_w = min(420, w - 40)
@@ -71,17 +75,17 @@ class ProcessingOverlay(QWidget):
         glow_alpha = int(40 + 30 * self._pulse)
         for r in range(20, 0, -4):
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(139, 92, 246, glow_alpha))
+            painter.setBrush(QColor(T.BRAND_R, T.BRAND_G, T.BRAND_B, glow_alpha))
             painter.drawRoundedRect(
                 banner_rect.adjusted(-r, -r, r, r), 20 + r, 20 + r
             )
 
         # Banner fill
         grad = QLinearGradient(bx, by, bx + banner_w, by)
-        grad.setColorAt(0, QColor(40, 38, 62))
-        grad.setColorAt(1, QColor(55, 48, 85))
+        grad.setColorAt(0, QColor(T.BG_LAYER_3))
+        grad.setColorAt(1, QColor(T.BG_LAYER_4))
         painter.setBrush(grad)
-        painter.setPen(QColor(139, 92, 246, 120))
+        painter.setPen(QColor(T.BRAND_R, T.BRAND_G, T.BRAND_B, 120))
         painter.drawRoundedRect(banner_rect, 16, 16)
 
         # Spinner dots
@@ -92,7 +96,7 @@ class ProcessingOverlay(QWidget):
             angle_offset = self._pulse * math.pi + i * (math.pi * 2 / 3)
             alpha = int(120 + 135 * abs(math.sin(angle_offset)))
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(139, 92, 246, alpha))
+            painter.setBrush(QColor(T.BRAND_R, T.BRAND_G, T.BRAND_B, alpha))
             dot_y = cy + math.sin(angle_offset) * 6
             painter.drawEllipse(QRectF(cx + i * 12 - 12, dot_y - 3, 6, 6))
 
@@ -102,7 +106,7 @@ class ProcessingOverlay(QWidget):
         font.setPixelSize(18)
         font.setWeight(QFont.Weight.DemiBold)
         painter.setFont(font)
-        painter.setPen(QColor(228, 228, 237))
+        painter.setPen(QColor(T.FG_PRIMARY))
         text_x = bx + 60
         text_y = by + banner_h / 2 - 4
         painter.drawText(int(text_x), int(text_y), self._title)
@@ -112,5 +116,5 @@ class ProcessingOverlay(QWidget):
         sub_font.setFamily("Segoe UI Variable")
         sub_font.setPixelSize(12)
         painter.setFont(sub_font)
-        painter.setPen(QColor(136, 134, 160))
+        painter.setPen(QColor(T.FG_2))
         painter.drawText(int(text_x), int(text_y + 20), self._subtitle)

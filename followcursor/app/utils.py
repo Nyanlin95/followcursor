@@ -3,7 +3,7 @@
 import logging
 import subprocess
 import sys
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,36 @@ def fmt_time(ms: float) -> str:
     s = int(ms / 1000)
     m = s // 60
     return f"{m}:{s % 60:02d}"
+
+
+def ripple_delete_frame_timestamps(
+    timestamps: List[float],
+    source_indices: Optional[List[int]],
+    delete_start_ms: float,
+    delete_end_ms: float,
+) -> Tuple[List[float], List[int]]:
+    """Ripple-delete a clip range from edited per-frame timestamps.
+
+    Returns retimed timestamps and parallel physical source-frame indices.
+    ``source_indices[i]`` is the OpenCV frame index for ``timestamps[i]``.
+    """
+    gap = delete_end_ms - delete_start_ms
+    if gap <= 0:
+        indices = source_indices if source_indices is not None else list(range(len(timestamps)))
+        return list(timestamps), list(indices)
+
+    if source_indices is None:
+        source_indices = list(range(len(timestamps)))
+
+    new_ts: List[float] = []
+    new_idx: List[int] = []
+    for ts, src_i in zip(timestamps, source_indices):
+        if delete_start_ms <= ts < delete_end_ms:
+            continue
+        new_t = ts - gap if ts >= delete_end_ms else ts
+        new_ts.append(new_t)
+        new_idx.append(src_i)
+    return new_ts, new_idx
 
 
 # ── Hardware-accelerated encoder support ────────────────────────────

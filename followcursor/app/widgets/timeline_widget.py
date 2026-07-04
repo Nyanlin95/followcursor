@@ -293,24 +293,7 @@ class _TimelineTrack(QWidget):
 
     def _menu_style(self) -> str:
         """Return the context menu stylesheet based on the current theme."""
-        if self._dark_mode:
-            return (
-                "QMenu { background: #28263e; color: #e4e4ed; border: 1px solid #3d3a58;"
-                "        border-radius: 6px; padding: 4px 0; }"
-                "QMenu::item { padding: 6px 16px; }"
-                "QMenu::item:selected { background: #8b5cf6; border-radius: 4px; margin: 0 4px; }"
-                "QMenu::item:disabled { color: #9c99b6; }"
-                "QMenu::separator { height: 1px; background: #3d3a58; margin: 4px 8px; }"
-            )
-        else:
-            return (
-                f"QMenu {{ background: {T.LIGHT_BG_1}; color: {T.LIGHT_FG_1}; border: 1px solid {T.LIGHT_STROKE_1};"
-                "        border-radius: 6px; padding: 4px 0; }"
-                "QMenu::item { padding: 6px 16px; }"
-                f"QMenu::item:selected {{ background: {T.BRAND}; color: white; border-radius: 4px; margin: 0 4px; }}"
-                f"QMenu::item:disabled {{ color: {T.LIGHT_FG_4}; }}"
-                f"QMenu::separator {{ height: 1px; background: {T.LIGHT_STROKE_2}; margin: 4px 8px; }}"
-            )
+        return T.menu_stylesheet(dark=self._dark_mode)
 
     # ── coordinate mapping helpers ────────────────────────────────
 
@@ -651,7 +634,7 @@ class _TimelineTrack(QWidget):
             t += interval_ms
 
     def _draw_mouse_track(self, painter: QPainter, w: int, top: int, h: int) -> None:
-        """Draw mouse speed heatmap — purple gradient."""
+        """Draw mouse speed heatmap — brand-blue gradient."""
         track = self.mouse_track
         eff_dur = self._eff_dur
         if len(track) < 2 or eff_dur <= 0:
@@ -690,9 +673,9 @@ class _TimelineTrack(QWidget):
         bw = w / buckets
         for i, s in enumerate(speeds):
             intensity = s / max_speed
-            r = int(120 + intensity * 100)
-            g = int(60 + intensity * 20)
-            b = int(220 + intensity * 35)
+            r = int(T.BRAND_R * (0.35 + intensity * 0.35))
+            g = int(T.BRAND_G * (0.35 + intensity * 0.45))
+            b = int(T.BRAND_B * (0.55 + intensity * 0.45))
             a = int((0.3 + intensity * 0.6) * 255)
             painter.fillRect(QRectF(i * bw, top, bw + 1, h), QColor(r, g, b, a))
 
@@ -794,11 +777,11 @@ class _TimelineTrack(QWidget):
 
             # Background fill — brighter when selected
             if is_selected:
-                painter.setBrush(QBrush(QColor(139, 92, 246, 80)))
-                painter.setPen(QPen(QColor("#a78bfa"), 2.0))
+                painter.setBrush(QBrush(QColor(T.BRAND_R, T.BRAND_G, T.BRAND_B, 80)))
+                painter.setPen(QPen(QColor(T.BRAND_LIGHT), 2.0))
             else:
-                painter.setBrush(QBrush(QColor(139, 92, 246, 40)))
-                painter.setPen(QPen(QColor("#8b5cf6"), 1.5))
+                painter.setBrush(QBrush(QColor(T.BRAND_R, T.BRAND_G, T.BRAND_B, 40)))
+                painter.setPen(QPen(QColor(T.BRAND), 1.5))
             painter.drawRoundedRect(rect, 4, 4)
 
             # Find the zoom-in and zoom-out keyframes for markers
@@ -816,8 +799,8 @@ class _TimelineTrack(QWidget):
                 ramp_right = min(ex, kf_in_end_x)
                 if ramp_right > ramp_left + 2:
                     grad_in = QLinearGradient(ramp_left, 0, ramp_right, 0)
-                    grad_in.setColorAt(0.0, QColor(139, 92, 246, 15))
-                    grad_in.setColorAt(1.0, QColor(139, 92, 246, 70))
+                    grad_in.setColorAt(0.0, QColor(T.BRAND_R, T.BRAND_G, T.BRAND_B, 15))
+                    grad_in.setColorAt(1.0, QColor(T.BRAND_R, T.BRAND_G, T.BRAND_B, 70))
                     painter.setBrush(QBrush(grad_in))
                     painter.setPen(Qt.PenStyle.NoPen)
                     painter.drawRect(QRectF(ramp_left, top + 1, ramp_right - ramp_left, h - 2))
@@ -826,7 +809,7 @@ class _TimelineTrack(QWidget):
                     tri_x = ramp_right
                     tri_y = top + h / 2
                     tri_size = min(5, h / 4)
-                    painter.setBrush(QBrush(QColor("#a78bfa")))
+                    painter.setBrush(QBrush(QColor(T.BRAND_LIGHT)))
                     painter.drawConvexPolygon([
                         QPointF(tri_x - tri_size, tri_y - tri_size),
                         QPointF(tri_x, tri_y),
@@ -842,8 +825,8 @@ class _TimelineTrack(QWidget):
                 ramp_right = min(ex, kf_out_end_x)
                 if ramp_right > ramp_left + 2:
                     grad_out = QLinearGradient(ramp_left, 0, ramp_right, 0)
-                    grad_out.setColorAt(0.0, QColor(139, 92, 246, 70))
-                    grad_out.setColorAt(1.0, QColor(139, 92, 246, 15))
+                    grad_out.setColorAt(0.0, QColor(T.BRAND_R, T.BRAND_G, T.BRAND_B, 70))
+                    grad_out.setColorAt(1.0, QColor(T.BRAND_R, T.BRAND_G, T.BRAND_B, 15))
                     painter.setBrush(QBrush(grad_out))
                     painter.setPen(Qt.PenStyle.NoPen)
                     painter.drawRect(QRectF(ramp_left, top + 1, ramp_right - ramp_left, h - 2))
@@ -868,7 +851,7 @@ class _TimelineTrack(QWidget):
                 label_right = min(label_right, self._ms_to_x(kf_out.timestamp, w) - 4)
             label_w = label_right - label_left
             if label_w > 40:
-                painter.setPen(QPen(QColor("#a78bfa")))
+                painter.setPen(QPen(QColor(T.BRAND_LIGHT)))
                 text_rect = QRectF(label_left, top, label_w, h)
                 # Show speed badge if non-default speed is set on the zoom-in kf
                 seg_speed = kf_in.speed if kf_in else 1.0
@@ -916,7 +899,7 @@ class _TimelineTrack(QWidget):
                     painter.setBrush(QBrush(QColor("#facc15")))
                     painter.drawEllipse(QPointF(pp_x, cy), radius, radius)
                     # Number label — dark text on yellow
-                    painter.setPen(QPen(QColor("#1b1a2e")))
+                    painter.setPen(QPen(QColor(T.BG_LAYER_1)))
                     num_rect = QRectF(pp_x - radius, cy - radius, radius * 2, radius * 2)
                     painter.drawText(num_rect, Qt.AlignmentFlag.AlignCenter, str(pp_idx))
                 # Restore font
@@ -1728,7 +1711,8 @@ class TimelineWidget(QWidget):
             "Right-click empty space or press S to split a clip"
         )
         hint_kf.setObjectName("Muted")
-        hints_row.addWidget(hint_kf)
+        hint_kf.setWordWrap(True)
+        hints_row.addWidget(hint_kf, 1)
         hints_row.addStretch()
         layout.addLayout(hints_row)
 

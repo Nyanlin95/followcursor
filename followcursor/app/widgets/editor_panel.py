@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFormLayout,
     QScrollArea,
+    QSizePolicy,
 )
 
 from .. import tokens as T
@@ -86,10 +87,11 @@ class _CollapsibleSection(QWidget):
         self._btn.setStyleSheet(
             f"QPushButton {{ background: {T.BG_ELEVATED}; color: {T.FG_SECONDARY};"
             f"  font-size: {T.FONT_SIZE_CAPTION}px;"
-            f"  font-weight: 600; letter-spacing: 1px; border: none;"
+            f"  font-weight: {T.FONT_WEIGHT_SEMIBOLD}; border: none;"
             f"  border-bottom: 1px solid {T.BORDER_SUBTLE}; text-align: left;"
             f"  padding: 0 {T.SPACE_MD}px; }}"
             f"QPushButton:hover {{ background: {T.BG_INTERACTIVE}; color: {T.FG_PRIMARY}; }}"
+            f"QPushButton:focus {{ outline: none; border: none; border-bottom: 1px solid {T.BORDER_SUBTLE}; }}"
         )
         self._btn.clicked.connect(self._toggle)
         layout.addWidget(self._btn)
@@ -119,23 +121,8 @@ class _AISettingsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("AI Settings — Azure AI Foundry")
         self.setMinimumWidth(420)
-        self.setStyleSheet(
-            f"QDialog {{ background: {T.BG_SURFACE}; }}"
-            f"QLabel {{ color: {T.FG_PRIMARY}; font-size: {T.FONT_SIZE_BODY}px; }}"
-            f"QLineEdit {{ background: {T.BG_INTERACTIVE}; color: {T.FG_PRIMARY};"
-            f"  border: 1px solid {T.CARD_BORDER};"
-            f"  border-radius: {T.RADIUS_SMALL}px; padding: 6px;"
-            f"  font-size: {T.FONT_SIZE_BODY}px; }}"
-            f"QComboBox {{ background: {T.BG_INTERACTIVE}; color: {T.FG_PRIMARY};"
-            f"  border: 1px solid {T.CARD_BORDER};"
-            f"  border-radius: {T.RADIUS_SMALL}px; padding: {T.SPACE_XXS}px {T.SPACE_XS}px;"
-            f"  font-size: {T.FONT_SIZE_BODY}px; }}"
-            f"QPushButton {{ background: {T.BG_INTERACTIVE}; color: {T.FG_PRIMARY};"
-            f"  border: 1px solid {T.CARD_BORDER};"
-            f"  border-radius: {T.RADIUS_SMALL}px; padding: 6px {T.SPACE_MD}px;"
-            f"  min-width: 80px; }}"
-            f"QPushButton:hover {{ background: {T.BRAND}; }}"
-        )
+        dark = getattr(parent, "_dark_mode", True)
+        self.setStyleSheet(T.form_dialog_stylesheet(dark=dark))
 
         # Fluent 2 — medium shadow on floating dialog
         apply_shadow(self, level="medium")
@@ -150,7 +137,8 @@ class _AISettingsDialog(QDialog):
             "TTS uses Azure Speech Service with the same key."
         )
         info.setWordWrap(True)
-        info.setStyleSheet(f"color: {T.FG_SECONDARY}; font-size: 12px;")
+        info.setObjectName("Muted")
+        info.setStyleSheet(f"font-size: {T.FONT_SIZE_CAPTION_1}px;")
         layout.addWidget(info)
 
         form = QFormLayout()
@@ -226,6 +214,7 @@ class EditorPanel(QWidget):
         super().__init__(parent)
         self.setObjectName("EditorPanel")
         self.setFixedWidth(320)
+        self._dark_mode = True
 
         # Outer layout: collapsible sections + fixed bottom bar
         outer = QVBoxLayout(self)
@@ -651,21 +640,25 @@ class EditorPanel(QWidget):
         # Fluent 2 — focus ring glow on all interactive controls
         for child in self.findChildren(QPushButton):
             install_focus_ring(child)
+            if child.objectName() == "CtrlBtn":
+                child.setSizePolicy(
+                    QSizePolicy.Policy.Expanding,
+                    QSizePolicy.Policy.Fixed,
+                )
         for child in self.findChildren(QComboBox):
             install_focus_ring(child)
 
     # ── position / depth controls ───────────────────────────────────
 
+    def set_dark_mode(self, dark: bool) -> None:
+        """Sync menu and dialog styling with the application theme."""
+        self._dark_mode = dark
+
     def _show_settings_menu(self) -> None:
         """Show settings popup menu from the cog button."""
         from PySide6.QtWidgets import QMenu
         menu = QMenu(self)
-        menu.setStyleSheet(
-            f"QMenu {{ background: {T.BG_INTERACTIVE}; color: {T.FG_PRIMARY};"
-            f"  border: 1px solid {T.CARD_BORDER}; padding: {T.SPACE_XXS}px; }}"
-            f"QMenu::item {{ padding: 6px 20px; }}"
-            f"QMenu::item:selected {{ background: {T.BRAND}; }}"
-        )
+        menu.setStyleSheet(T.menu_stylesheet(dark=self._dark_mode))
 
         # Debug overlay toggle
         check_text = "✓ " if self._debug_overlay_enabled else "  "
@@ -1179,15 +1172,7 @@ class EditorPanel(QWidget):
             "MIT License<br>"
             "Copyright \u00a9 2026 Ahmed Sabbour</p>"
         )
-        dlg.setStyleSheet(
-            f"QMessageBox {{ background: {T.BG_SURFACE}; }}"
-            f"QMessageBox QLabel {{ color: {T.FG_PRIMARY}; font-size: {T.FONT_SIZE_BODY}px; }}"
-            f"QPushButton {{ min-width: 80px; min-height: 28px;"
-            f"  background: {T.BG_INTERACTIVE}; color: {T.FG_PRIMARY};"
-            f"  border: 1px solid {T.CARD_BORDER};"
-            f"  border-radius: {T.RADIUS_SMALL}px; padding: {T.SPACE_XXS}px {T.SPACE_MD}px; }}"
-            f"QPushButton:hover {{ background: {T.BRAND}; }}"
-        )
+        dlg.setStyleSheet(T.dialog_stylesheet(dark=self._dark_mode))
         dlg.exec()
 
     def _on_click_changed(self, name: str) -> None:

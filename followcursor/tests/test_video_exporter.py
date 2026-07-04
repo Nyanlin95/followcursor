@@ -7,9 +7,28 @@ Qt or actual video files.
 import pytest
 import numpy as np
 
-from app.video_exporter import GeometryComputer, VideoProbeResult, GeometryResult
+from app.video_exporter import GeometryComputer, VideoExporter, VideoProbeResult, GeometryResult
 from app.frames import FramePreset, DEFAULT_FRAME, FRAME_PRESETS
 from app.backgrounds import PRESETS as BACKGROUND_PRESETS
+
+
+class _FakeCapture:
+    def get(self, prop):
+        import cv2
+
+        values = {
+            cv2.CAP_PROP_FPS: 12.0,
+            cv2.CAP_PROP_FRAME_COUNT: 120,
+            cv2.CAP_PROP_FRAME_WIDTH: 1920,
+            cv2.CAP_PROP_FRAME_HEIGHT: 1080,
+        }
+        return values.get(prop, 0)
+
+    def grab(self):
+        return False
+
+    def set(self, prop, value):
+        return True
 
 
 # Helper to create a "No Frame" preset
@@ -218,6 +237,38 @@ class TestVideoProbeResult:
         assert result.out_h == 1080
         assert result.fps == 30.0
         assert result.is_gif is False
+
+
+class TestVideoExporterProbe:
+    def test_mp4_exports_at_minimum_sixty_fps(self):
+        exporter = VideoExporter()
+
+        result = exporter._probe_video(
+            _FakeCapture(),
+            actual_fps=0.0,
+            duration_ms=0.0,
+            frame_timestamps=None,
+            output_dim="auto",
+            output_path="demo.mp4",
+        )
+
+        assert result is not None
+        assert result.fps == pytest.approx(60.0)
+
+    def test_gif_keeps_source_fps(self):
+        exporter = VideoExporter()
+
+        result = exporter._probe_video(
+            _FakeCapture(),
+            actual_fps=0.0,
+            duration_ms=0.0,
+            frame_timestamps=None,
+            output_dim="auto",
+            output_path="demo.gif",
+        )
+
+        assert result is not None
+        assert result.fps == pytest.approx(12.0)
 
 
 class TestGeometryResult:

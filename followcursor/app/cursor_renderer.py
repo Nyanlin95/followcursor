@@ -31,16 +31,16 @@ logger = logging.getLogger(__name__)
 # ── Cursor appearance ───────────────────────────────────────────────
 
 CURSOR_COLOR = (255, 255, 255)       # white  (RGB for QPainter, BGR for CV)
-CURSOR_OUTLINE = (30, 30, 30)        # near-black outline (softer than pure black)
-CURSOR_OUTLINE_W = 2.0               # outline width
-CURSOR_SHADOW_ALPHA = 80             # drop shadow opacity (0-255)
+CURSOR_OUTLINE = (24, 24, 27)        # soft near-black outline
+CURSOR_SHADOW_ALPHA = 64             # drop shadow opacity (0-255)
 
 # ── Click effect appearance ─────────────────────────────────────────
 
 CLICK_DURATION_MS = 400.0            # how long the click ripple is visible
-CLICK_COLOR = (138, 92, 246)         # purple (#8b5cf6) in RGB
-CLICK_COLOR_BGR = (246, 92, 138)     # purple in BGR for OpenCV
+CLICK_COLOR = (59, 130, 246)         # electric blue (#3b82f6) in RGB
+CLICK_COLOR_BGR = (246, 130, 59)     # blue in BGR for OpenCV
 CLICK_MAX_RADIUS = 24.0              # max ripple radius (preview, scaled)
+CURSOR_SMOOTH_WINDOW_MS = 72.0       # centered smoothing window for exported cursor motion
 
 
 def _interp_mouse(track: List[MousePosition], time_ms: float) -> Optional[Tuple[float, float]]:
@@ -72,38 +72,108 @@ def _interp_mouse(track: List[MousePosition], time_ms: float) -> Optional[Tuple[
     return a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t
 
 
-# ── SVG cursor shape ────────────────────────────────────────────────
-# Pointer arrow defined as two SVG sub-paths.  The outer silhouette
-# provides the dark border; the inner shape is filled white.
-# Original viewBox 0 0 2048 2048; arrow tip at ~(384, 141).
+def _interp_mouse_smooth(
+    track: List[MousePosition],
+    time_ms: float,
+    window_ms: float = CURSOR_SMOOTH_WINDOW_MS,
+) -> Optional[Tuple[float, float]]:
+    """Interpolate and gently smooth cursor position around *time_ms*.
 
+    The mouse tracker samples at roughly 60 Hz, but tiny timer jitter and
+    capture/export frame boundaries can make the rendered cursor vibrate by a
+    pixel or two.  A centered triangular window preserves intentional movement
+    while removing that high-frequency shake.
+    """
+    if not track:
+        return None
+    if window_ms <= 0 or len(track) < 3:
+        return _interp_mouse(track, time_ms)
+
+    half_window = window_ms / 2.0
+
+    lo_time = time_ms - half_window
+    hi_time = time_ms + half_window
+    lo = 0
+    hi = len(track)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if track[mid].timestamp < lo_time:
+            lo = mid + 1
+        else:
+            hi = mid
+    start = lo
+
+    lo = start
+    hi = len(track)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if track[mid].timestamp <= hi_time:
+            lo = mid + 1
+        else:
+            hi = mid
+    end = lo
+
+    if end - start < 2:
+        return _interp_mouse(track, time_ms)
+
+    weighted_x = 0.0
+    weighted_y = 0.0
+    total_weight = 0.0
+    for sample in track[start:end]:
+        dist = abs(sample.timestamp - time_ms)
+        weight = max(0.0, 1.0 - (dist / half_window))
+        weighted_x += sample.x * weight
+        weighted_y += sample.y * weight
+        total_weight += weight
+
+    if total_weight <= 0.0:
+        return _interp_mouse(track, time_ms)
+    return weighted_x / total_weight, weighted_y / total_weight
+
+
+# ── SVG cursor shape ────────────────────────────────────────────────
+# Pointer arrow defined as two SVG sub-paths. The outer silhouette provides
+# the dark border; the inner shape is filled white. The viewBox starts at the
+# hotspot so preview and export align the arrow tip exactly to the cursor.
 _SVG_PATH_OUTER = (
-    "M1089 2027q-38 0-69-19t-48-55l-167-364-257 258"
-    "q-28 28-67 28-41 0-69-27t-28-69V141q0-41 28-68t69-28"
-    "q39 0 67 28l1171 1171q28 28 28 67 0 41-27 69t-69 28"
-    "h-381l151 337q11 25 11 53 0 38-19 68t-54 47l-216 102"
-    "q-26 12-54 12z"
+    "M0 0"
+    "L0 58"
+    "Q0 62 3 64"
+    "Q6 66 9 63"
+    "L21 51"
+    "L29 70"
+    "Q31 75 36 73"
+    "L48 68"
+    "Q53 66 51 61"
+    "L43 43"
+    "H58"
+    "Q62 43 64 40"
+    "Q65 36 62 33"
+    "Z"
 )
 
 _SVG_PATH_INNER = (
-    "M1088 1899l216-101-171-383"
-    "q-8-18-8-39 0-40 28-68t68-28h352"
-    "L512 219v1482l236-235"
-    "q28-28 68-28 28 0 52 15t35 41l185 405z"
+    "M6 11"
+    "L6 52"
+    "L22 37"
+    "L34 65"
+    "L44 61"
+    "L32 34"
+    "H52"
+    "Z"
 )
 
-# Shadow offset in SVG-space units (~8 % of arrow height)
-_SHADOW_OFF = 160
+# Shadow offset in SVG-space units.
+_SHADOW_OFF_X = 3.0
+_SHADOW_OFF_Y = 4.0
 
 # Arrow-tip (hotspot) in SVG coordinates
-_TIP_SVG_X, _TIP_SVG_Y = 384, 141
+_TIP_SVG_X, _TIP_SVG_Y = 0.0, 0.0
 
-# ViewBox starts exactly at the arrow tip so the hotspot is at the
-# rendered-image origin (top-left = pixel 0,0).  The right/bottom edge
-# is kept at the same absolute SVG position as before to preserve the
-# full cursor body + shadow.
+# ViewBox starts exactly at the arrow tip so the hotspot is at the rendered
+# image origin (top-left = pixel 0,0).
 _VB_X, _VB_Y = _TIP_SVG_X, _TIP_SVG_Y  # tip at viewBox origin
-_VB_W, _VB_H = 1536, 2059               # extends to SVG x=1920, y=2200
+_VB_W, _VB_H = 70.0, 82.0
 
 # Hotspot normalised to viewBox (0-1) — exactly zero because the tip
 # IS the viewBox origin.
@@ -111,7 +181,7 @@ _TIP_NX = 0.0
 _TIP_NY = 0.0
 
 # Fraction of viewBox height occupied by the arrow (tip to bottom)
-_ARROW_FRAC = (2027 - _TIP_SVG_Y) / _VB_H
+_ARROW_FRAC = 74.0 / _VB_H
 
 
 def _build_cursor_svg() -> bytes:
@@ -123,7 +193,7 @@ def _build_cursor_svg() -> bytes:
         f'<svg xmlns="http://www.w3.org/2000/svg"'
         f' viewBox="{_VB_X} {_VB_Y} {_VB_W} {_VB_H}">'
         f'<path fill="black" fill-opacity="{sa}"'
-        f' transform="translate({_SHADOW_OFF},{_SHADOW_OFF})"'
+        f' transform="translate({_SHADOW_OFF_X},{_SHADOW_OFF_Y})"'
         f' d="{_SVG_PATH_OUTER}"/>'
         f'<path fill="{ol}" d="{_SVG_PATH_OUTER}"/>'
         f'<path fill="{fl}" d="{_SVG_PATH_INNER}"/>'
@@ -161,7 +231,7 @@ def draw_cursor_qpainter(
     *monitor_rect* = dict with left/top/width/height of the captured monitor.
     *screen_rect_*  = pixel position of the screen area in painter coordinates.
     """
-    pos = _interp_mouse(track, time_ms)
+    pos = _interp_mouse_smooth(track, time_ms)
     if pos is None:
         return
 
@@ -180,7 +250,7 @@ def draw_cursor_qpainter(
     py = screen_rect_y + ny * screen_rect_h
 
     # Cursor size scales with screen rect (desired arrow height)
-    cs = max(14.0, screen_rect_h * 0.032)
+    cs = max(18.0, screen_rect_h * 0.038)
 
     # Full SVG render size (arrow + shadow)
     render_h = cs / _ARROW_FRAC
@@ -265,7 +335,7 @@ def draw_cursor_cv(
     *frame_bgr* is the raw video frame (same resolution as monitor).
     The cursor template is pre-built via _build_cursor_template().
     """
-    pos = _interp_mouse(track, time_ms)
+    pos = _interp_mouse_smooth(track, time_ms)
     if pos is None:
         return
 

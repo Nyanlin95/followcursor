@@ -576,6 +576,7 @@ class VideoExporter(QObject):
         output_dim=None,
         duration_ms: float = 0.0,
         frame_timestamps: Optional[List[float]] = None,
+        frame_source_indices: Optional[List[int]] = None,
         trim_start_ms: float = 0.0,
         trim_end_ms: float = 0.0,
         encoder_id: str = "libx264",
@@ -614,6 +615,7 @@ class VideoExporter(QObject):
                   output_dim,
                   duration_ms,
                   frame_timestamps,
+                  frame_source_indices,
                   trim_start_ms,
                   trim_end_ms,
                   encoder_id,
@@ -698,15 +700,13 @@ class VideoExporter(QObject):
         # Normalise extension: allow .gif; everything else becomes .mp4
         is_gif = output_path.lower().endswith(".gif")
 
-        # Export on a stable CFR timeline.  WGC recordings can have sparse,
-        # irregular source frames (only when the image changes).  Keeping
-        # a very low averaged FPS here makes output choppy and drifts
-        # overlays/audio relative to visual content.  Use at least 24 fps
-        # for MP4 (cinematic standard — smooth enough without inflating
-        # frame count as much as 30 fps would).
+        # Export on a stable CFR timeline. WGC recordings can have sparse,
+        # irregular source frames (only when the image changes). A 60 fps MP4
+        # timeline gives cursor overlays and camera pans enough temporal
+        # resolution to feel like a polished product demo.
         fps = src_fps
-        if not is_gif and fps < 24.0:
-            fps = 24.0
+        if not is_gif and fps < 60.0:
+            fps = 60.0
         logger.info(
             "Export timing | source_fps=%.2f output_fps=%.2f total_frames=%d frame_timestamps=%d",
             src_fps,
@@ -826,6 +826,7 @@ class VideoExporter(QObject):
         output_dim=None,
         duration_ms: float = 0.0,
         frame_timestamps: Optional[List[float]] = None,
+        frame_source_indices: Optional[List[int]] = None,
         trim_start_ms: float = 0.0,
         trim_end_ms: float = 0.0,
         encoder_id: str = "libx264",
@@ -1050,8 +1051,8 @@ class VideoExporter(QObject):
 
                 # Pre-build cursor template for overlay
                 # Use scr_h (screen area height) with same factor as preview
-                # compositor (screen_rect_h * 0.032) for visual consistency
-                cursor_h_px = max(16, int(scr_h * 0.032))
+                # compositor (screen_rect_h * 0.038) for visual consistency
+                cursor_h_px = max(18, int(scr_h * 0.038))
                 c_bgr, c_alpha = _build_cursor_template(cursor_h_px)
                 m_left = monitor_rect.get("left", 0)
                 m_top = monitor_rect.get("top", 0)
@@ -1066,7 +1067,7 @@ class VideoExporter(QObject):
                 if frame_timestamps:
                     source_timestamps = []
                     last_ts = 0.0
-                    for t in frame_timestamps[:total_frames]:
+                    for t in frame_timestamps:
                         ts = float(t)
                         if ts < last_ts:
                             ts = last_ts
@@ -1078,6 +1079,12 @@ class VideoExporter(QObject):
                     ]
                 if not source_timestamps:
                     return False
+
+                def _physical_frame_index(list_idx: int) -> int:
+                    list_idx = max(0, min(list_idx, len(source_timestamps) - 1))
+                    if frame_source_indices:
+                        return frame_source_indices[list_idx]
+                    return list_idx
 
                 # ── Pipeline: compositor → queue → writer thread → ffmpeg ──
                 _QUEUE_DEPTH = 16
@@ -1142,8 +1149,9 @@ class VideoExporter(QObject):
                     _seg_starts = [s for s, _ in _seg_ranges]
 
                 # Move decoder to the source frame active at trim start.
-                start_src_idx = max(0, bisect.bisect_right(source_timestamps, eff_ts) - 1)
-                start_src_idx = min(start_src_idx, len(source_timestamps) - 1)
+                start_list_idx = max(0, bisect.bisect_right(source_timestamps, eff_ts) - 1)
+                start_list_idx = min(start_list_idx, len(source_timestamps) - 1)
+                start_src_idx = _physical_frame_index(start_list_idx)
                 while src_idx < start_src_idx:
                     ret, frame = cap.read()
                     if not ret:
@@ -1193,8 +1201,9 @@ class VideoExporter(QObject):
                             continue
 
                     # Pick the source frame for this output timestamp
-                    target_src_idx = max(0, bisect.bisect_right(source_timestamps, t_ms) - 1)
-                    target_src_idx = min(target_src_idx, len(source_timestamps) - 1)
+                    target_list_idx = max(0, bisect.bisect_right(source_timestamps, t_ms) - 1)
+                    target_list_idx = min(target_list_idx, len(source_timestamps) - 1)
+                    target_src_idx = _physical_frame_index(target_list_idx)
 
                     while src_idx < target_src_idx:
                         ret, frame = cap.read()
@@ -1209,7 +1218,9 @@ class VideoExporter(QObject):
                     # Only copy when overlays will draw in-place on this frame
                     frame = last_f.copy() if _needs_overlay else last_f
 
-                    zoom, px, py = engine.compute_at(t_ms)
+                    zoom, px, py = engine.compute_at(
+                        t_ms, mouse_track, monitor_rect,
+                    )
 
                     if _has_cursor:
                         draw_cursor_cv(
@@ -1254,7 +1265,9 @@ class VideoExporter(QObject):
                         extra = int((end_time - video_end_ms) / 1000.0 * fps) + 1
                         for ei in range(extra):
                             t_ms = video_end_ms + ((ei + 1) / fps) * 1000.0
-                            zoom, px, py = engine.compute_at(t_ms)
+                            zoom, px, py = engine.compute_at(
+                        t_ms, mouse_track, monitor_rect,
+                    )
                             fc = last_f.copy()
 
                             if _has_cursor:

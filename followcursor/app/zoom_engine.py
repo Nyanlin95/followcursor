@@ -10,10 +10,11 @@ voiceover segments so that undo/redo covers click deletions, segment
 deletions, voiceover removals, and keyframe edits.
 """
 
+import bisect
 import copy
 from dataclasses import dataclass, field
-from typing import List, Tuple
-from .models import ClickEvent, VideoSegment, VoiceoverSegment, ZoomKeyframe
+from typing import List, Optional, Tuple
+from .models import ClickEvent, MousePosition, VideoSegment, VoiceoverSegment, ZoomKeyframe
 
 
 @dataclass
@@ -53,6 +54,46 @@ def ease_in_out(t: float) -> float:
 
 # Keep the old name as an alias for any external callers
 smooth_step = ease_out
+
+
+def clamp_pan_for_zoom(pan_x: float, pan_y: float, zoom: float) -> Tuple[float, float]:
+    """Clamp normalized pan so the zoomed viewport stays inside the source."""
+    safe_zoom = zoom if zoom > 0.0 else 1.0
+    half_vw = 0.5 / safe_zoom
+    half_vh = 0.5 / safe_zoom
+    return (
+        max(half_vw, min(1.0 - half_vw, pan_x)),
+        max(half_vh, min(1.0 - half_vh, pan_y)),
+    )
+
+
+def mouse_pan_at_time(
+    mouse_track: List[MousePosition],
+    monitor_rect: dict,
+    time_ms: float,
+) -> Tuple[float, float]:
+    """Return normalized pan (0-1) for the cursor at *time_ms*."""
+    if not mouse_track or not monitor_rect:
+        return 0.5, 0.5
+
+    timestamps = [mp.timestamp for mp in mouse_track]
+    idx = bisect.bisect_left(timestamps, time_ms)
+    if idx == 0:
+        best = mouse_track[0]
+    elif idx >= len(mouse_track):
+        best = mouse_track[-1]
+    else:
+        before = mouse_track[idx - 1]
+        after = mouse_track[idx]
+        if (time_ms - before.timestamp) <= (after.timestamp - time_ms):
+            best = before
+        else:
+            best = after
+
+    mon = monitor_rect
+    px = (best.x - mon.get("left", 0)) / max(mon.get("width", 1), 1)
+    py = (best.y - mon.get("top", 0)) / max(mon.get("height", 1), 1)
+    return max(0.0, min(1.0, px)), max(0.0, min(1.0, py))
 
 
 def speed_at_time(keyframes: List[ZoomKeyframe], time_ms: float, duration_ms: float = 0.0) -> float:
@@ -191,7 +232,13 @@ class ZoomEngine:
         self.current_pan_x = 0.5
         self.current_pan_y = 0.5
 
-    def compute_at(self, time_ms: float) -> Tuple[float, float, float]:
+    def compute_at(
+        self,
+        time_ms: float,
+        mouse_track: Optional[List[MousePosition]] = None,
+        monitor_rect: Optional[dict] = None,
+        follow_cursor: bool = True,
+    ) -> Tuple[float, float, float]:
         """Returns (zoom, pan_x, pan_y) at given time."""
         if not self.keyframes:
             return 1.0, 0.5, 0.5
@@ -211,20 +258,31 @@ class ZoomEngine:
         progress = (
             min(elapsed / active_kf.duration, 1.0) if active_kf.duration > 0 else 1.0
         )
-        # Pan points use ease-in-out for smooth camera movement;
-        # zoom transitions use ease-out for snappy zoom-then-settle.
-        if active_kf.reason == "Pan point":
-            eased = ease_in_out(progress)
-        else:
-            eased = ease_out(progress)
+        # Zoom can arrive quickly, but pan should feel like a camera operator:
+        # gentle departure, clean travel, gentle arrival.
+        zoom_eased = ease_out(progress)
+        pan_eased = ease_in_out(progress)
 
         prev_zoom = self.keyframes[active_idx - 1].zoom if active_idx > 0 else 1.0
         prev_x = self.keyframes[active_idx - 1].x if active_idx > 0 else 0.5
         prev_y = self.keyframes[active_idx - 1].y if active_idx > 0 else 0.5
 
-        zoom = prev_zoom + (active_kf.zoom - prev_zoom) * eased
-        pan_x = prev_x + (active_kf.x - prev_x) * eased
-        pan_y = prev_y + (active_kf.y - prev_y) * eased
+        zoom = prev_zoom + (active_kf.zoom - prev_zoom) * zoom_eased
+        pan_x = prev_x + (active_kf.x - prev_x) * pan_eased
+        pan_y = prev_y + (active_kf.y - prev_y) * pan_eased
+
+        # While zoomed in and not mid-transition, track the live cursor so
+        # clicks and movement stay centered.  Keyframe easing still handles
+        # zoom-in, zoom-out, and explicit pan-point transitions.
+        if (
+            follow_cursor
+            and mouse_track
+            and monitor_rect
+            and zoom > 1.01
+            and (active_kf.duration <= 0 or progress >= 1.0)
+        ):
+            live_x, live_y = mouse_pan_at_time(mouse_track, monitor_rect, time_ms)
+            pan_x, pan_y = clamp_pan_for_zoom(live_x, live_y, zoom)
 
         return zoom, pan_x, pan_y
 
@@ -304,12 +362,21 @@ class ZoomEngine:
 
         return output_ms
 
-    def update(self, time_ms: float) -> None:
+    def update(
+        self,
+        time_ms: float,
+        mouse_track: Optional[List[MousePosition]] = None,
+        monitor_rect: Optional[dict] = None,
+        follow_cursor: bool = True,
+    ) -> None:
         """Evaluate zoom state at *time_ms* and cache the result.
 
         Convenience wrapper around ``compute_at()`` that stores the
         result in ``current_zoom``, ``current_pan_x``, ``current_pan_y``.
         """
         self.current_zoom, self.current_pan_x, self.current_pan_y = self.compute_at(
-            time_ms
+            time_ms,
+            mouse_track=mouse_track,
+            monitor_rect=monitor_rect,
+            follow_cursor=follow_cursor,
         )

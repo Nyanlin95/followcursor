@@ -94,7 +94,7 @@ def _apply_color(svg_content: str, color: str) -> str:
 
     Args:
         svg_content: Original SVG content as string
-        color: Color to apply (hex string like "#8b5cf6" or rgba string like "rgba(139, 92, 246, 1)")
+        color: Color to apply (hex string like "#3b82f6" or rgba string like "rgba(59, 130, 246, 1)")
 
     Returns:
         Modified SVG content with color applied
@@ -121,10 +121,10 @@ def _rgba_to_hex(rgba_str: str) -> str:
     """Convert rgba(r, g, b, a) string to #RRGGBB hex.
 
     Args:
-        rgba_str: String like "rgba(139, 92, 246, 1)"
+        rgba_str: String like "rgba(59, 130, 246, 1)"
 
     Returns:
-        Hex color string like "#8b5cf6"
+        Hex color string like "#3b82f6"
     """
     import re
     match = re.match(r"rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?\)", rgba_str)
