@@ -23,6 +23,9 @@ followcursor/msix/Assets/
 # Logs
 *.log
 
+# Local export output (generated during dev)
+followcursor/output/
+
 # Dev signing certificates
 .certs/
 

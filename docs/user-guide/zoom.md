@@ -119,6 +119,22 @@ The camera smoothly interpolates between pan points using ease-in-out transition
 
 ---
 
+## Cursor overlay during zoom *(fork)*
+
+On this fork, the recorded cursor is a **blue voxel pointer**. During zoom **transitions only** (not while holding steady zoom):
+
+| Phase | When | Effect |
+| ----- | ---- | ------ |
+| **Zoom in** | From 1× to zoomed, over the keyframe `duration` | Cursor **flips** horizontally around the hotspot |
+| **Zoom out** | From zoomed back to 1×, over the keyframe `duration` | Cursor **waves** (small rotation and wiggle) |
+| **Steady zoom** | Fully zoomed between transitions | Normal static cursor |
+
+Enter and exit flair never run at the same time. Exported MP4 and preview use the same behaviour.
+
+See [Fork lineage](../FORK.md) for upstream vs. fork scope.
+
+---
+
 ## Zoom Timeline Visual
 
 The timeline shows zoom segments as gradient-colored blocks. Pan point markers appear as numbered yellow circles. This gives you a clear picture of where the camera is active and what path it takes through your recording.

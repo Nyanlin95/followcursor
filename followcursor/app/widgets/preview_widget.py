@@ -72,6 +72,7 @@ class PreviewWidget(QWidget):
         # debug overlay
         self._debug_overlay: bool = False
         self._debug_keyframes: List[ZoomKeyframe] = []
+        self._zoom_keyframes: List[ZoomKeyframe] = []
 
         # background preset
         self._bg_preset = None  # None → use default
@@ -189,11 +190,16 @@ class PreviewWidget(QWidget):
         self._debug_overlay = enabled
         self.update()
 
+    def set_zoom_keyframes(self, keyframes: List[ZoomKeyframe]) -> None:
+        """Provide zoom keyframes for cursor transition flair during playback."""
+        self._zoom_keyframes = keyframes
+        self.update()
+
     def set_debug_keyframes(self, keyframes: List[ZoomKeyframe]) -> None:
-        """Provide keyframes for the debug overlay."""
+        """Provide keyframes for the debug overlay and cursor transition flair."""
         self._debug_keyframes = keyframes
-        if self._debug_overlay:
-            self.update()
+        self._zoom_keyframes = keyframes
+        self.update()
 
     def set_dark_mode(self, dark: bool) -> None:
         """Sync menu styling with the application theme."""
@@ -899,6 +905,7 @@ class PreviewWidget(QWidget):
             frame_preset=self._frame_preset,
             click_events=self._click_events or None,
             click_preset=self._click_preset,
+            zoom_keyframes=self._zoom_keyframes or None,
         )
 
         painter.setClipping(False)

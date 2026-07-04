@@ -130,6 +130,47 @@ def speed_at_time(keyframes: List[ZoomKeyframe], time_ms: float, duration_ms: fl
     return 1.0
 
 
+def compute_cursor_transition(
+    keyframes: List[ZoomKeyframe],
+    time_ms: float,
+) -> Tuple[Optional[str], float]:
+    """Return cursor flair phase during zoom transitions only.
+
+    Returns ``("enter", progress)`` while zooming in from 1×,
+    ``("exit", progress)`` while zooming out to 1×, and ``(None, 0)`` once
+    the transition finishes or while holding steady zoom.  Enter uses a flip;
+    exit uses a wave — never both at once.
+    """
+    if not keyframes:
+        return None, 0.0
+
+    active_kf: Optional[ZoomKeyframe] = None
+    active_idx = -1
+    for i in range(len(keyframes) - 1, -1, -1):
+        if time_ms >= keyframes[i].timestamp:
+            active_kf = keyframes[i]
+            active_idx = i
+            break
+
+    if active_kf is None or active_kf.duration <= 0:
+        return None, 0.0
+
+    elapsed = time_ms - active_kf.timestamp
+    if elapsed >= active_kf.duration:
+        return None, 0.0
+
+    progress = max(0.0, min(1.0, elapsed / active_kf.duration))
+    prev_zoom = keyframes[active_idx - 1].zoom if active_idx > 0 else 1.0
+
+    if active_kf.zoom > 1.01 and prev_zoom <= 1.01:
+        return "enter", progress
+
+    if active_kf.zoom <= 1.01 and prev_zoom > 1.01:
+        return "exit", progress
+
+    return None, 0.0
+
+
 MAX_UNDO = 50  # maximum undo history depth
 
 

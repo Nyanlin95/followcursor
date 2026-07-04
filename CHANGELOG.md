@@ -4,6 +4,24 @@ All notable changes to FollowCursor are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] — Nyanlin95 fork (`main`)
+
+Fork-specific work on [github.com/Nyanlin95/followcursor](https://github.com/Nyanlin95/followcursor). Upstream remains [sabbour/followcursor](https://github.com/sabbour/followcursor). See [docs/FORK.md](docs/FORK.md).
+
+### Added
+
+- **Blue voxel cursor** — block-style 3D pointer in the app brand palette
+- **Zoom transition cursor flair** — horizontal flip while zooming in; wave wiggle while zooming out (steady zoom stays static)
+- **Fork documentation** — [docs/FORK.md](docs/FORK.md) separates upstream scope from fork redoing
+
+### Changed
+
+- **UI layout stability** — fixed-width export/discard actions, record/stop stack, editor panel sizing, status bar overflow, focus-ring padding shifts
+
+### Tests
+
+- `compute_cursor_transition` and voxel cursor renderer coverage
+
 ## [0.13.0] — 2026-04-15
 
 ### Added

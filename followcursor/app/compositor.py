@@ -18,7 +18,7 @@ from PySide6.QtGui import (
     QPainterPath,
 )
 
-from .models import MousePosition
+from .models import MousePosition, ZoomKeyframe
 from .backgrounds import BackgroundPreset, DEFAULT_PRESET, WAVE_LAYERS
 from .frames import FramePreset, DEFAULT_FRAME
 from .models import ClickEffectPreset, DEFAULT_CLICK_EFFECT
@@ -123,6 +123,7 @@ def compose_scene(
     frame_preset: Optional[FramePreset] = None,
     click_events: Optional[List[ClickEvent]] = None,
     click_preset: Optional[ClickEffectPreset] = None,
+    zoom_keyframes: Optional[List[ZoomKeyframe]] = None,
 ) -> None:
     """Paint the device-frame composition onto *painter*.
 
@@ -297,6 +298,7 @@ def compose_scene(
                 draw_cursor_qpainter(
                     painter, mouse_track, time_ms, monitor_rect,
                     vscr_x, vscr_y, vscr_w, vscr_h,
+                    zoom_keyframes=zoom_keyframes,
                 )
             finally:
                 painter.restore()
@@ -305,6 +307,7 @@ def compose_scene(
             draw_cursor_qpainter(
                 painter, mouse_track, time_ms, monitor_rect,
                 scr_x, scr_y, scr_w, scr_h,
+                zoom_keyframes=zoom_keyframes,
             )
 
     # ── click effects overlay ──────────────────────────────────────

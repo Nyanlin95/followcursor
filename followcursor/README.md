@@ -1,5 +1,7 @@
 # FollowCursor
 
+> **Fork notice:** Personal fork of [sabbour/followcursor](https://github.com/sabbour/followcursor). Maintained at [Nyanlin95/followcursor](https://github.com/Nyanlin95/followcursor). See [Fork lineage](../docs/FORK.md).
+
 A Windows screen recorder with cinematic cursor-following zoom — built with **Python** and **PySide6 (Qt 6)**.
 
 Record your screen or any individual window, then export a polished MP4 video where the camera smoothly follows and zooms into your cursor movements. Perfect for tutorials, demos, and product walkthroughs.
@@ -19,6 +21,7 @@ Record your screen or any individual window, then export a polished MP4 video wh
 | [Quickstart Guide](../docs/QUICKSTART.md) | Install, record, edit, export — step by step |
 | [Architecture Guide](../docs/ARCHITECTURE.md) | How the codebase works: data flow, zoom engine, capture pipeline |
 | [Contributing Guide](../docs/CONTRIBUTING.md) | Dev setup, coding conventions, release process |
+| [Fork lineage](../docs/FORK.md) | Upstream vs. this fork — remotes, custom changes |
 
 ## Features
 
@@ -29,6 +32,7 @@ Record your screen or any individual window, then export a polished MP4 video wh
 - **AI Chapters** — Generate chapter markers from the same shared recording analysis used by narration so chapter beats, zoom emphasis, and presentation flow stay aligned without a second independent analysis pass
 - **AI Voiceover (TTS)** — Add text-to-speech voiceover segments at specific timeline positions via right-click or the editor panel. Enter text, pick from 6 voices (alloy, echo, fable, onyx, nova, shimmer), preview synthesized speech, or add it directly. Multiple segments are merged and muxed into the exported MP4. Voiceover audio is saved in .fcproj project files
 - **Manual Zoom Keyframes** — Right-click the timeline or preview to add zoom points; drag segments to reposition them
+- **Cursor transition flair** *(fork)* — Blue voxel pointer flips on zoom-in and waves on zoom-out ([details](../docs/FORK.md))
 - **Pan Path Points** — Add intermediate pan waypoints within a zoomed segment to create a smooth panning path through the zoomed view. Numbered markers show the order; drag, reorder, or delete them from the context menu
 - **Zoom Depth Control** — Right-click a zoom segment to set depth (Subtle 1.25×, Medium 1.5×, Close 2×, Detail 2.5×)
 - **Centroid Editing** — Reposition the pan center of any zoom keyframe by clicking "Set centroid" on a zoom segment, then clicking the target point on the preview
@@ -287,7 +291,7 @@ followcursor/
 │   ├── window_utils.py              # Win32 window enumeration & PrintWindow
 │   ├── video_exporter.py            # H.264 MP4 export with zoom & cursor
 │   ├── compositor.py                # QPainter compositing (frame + background)
-│   ├── cursor_renderer.py           # Arrow cursor + click effect rendering (ripple/burst/highlight)
+│   ├── cursor_renderer.py           # Voxel cursor + zoom transition flair + click effects
 │   ├── global_hotkeys.py            # Win32 RegisterHotKey via QThread
 │   ├── backgrounds.py               # 84 background presets (solids, gradients, patterns)
 │   ├── frames.py                    # 5 device frame presets

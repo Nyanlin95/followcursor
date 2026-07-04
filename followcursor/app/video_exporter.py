@@ -1227,6 +1227,7 @@ class VideoExporter(QObject):
                             frame, mouse_track, t_ms,
                             m_left, m_top, m_w, m_h,
                             c_bgr, c_alpha,
+                            zoom_keyframes=engine.keyframes,
                         )
                     if _has_clicks:
                         draw_clicks_cv(
@@ -1275,6 +1276,7 @@ class VideoExporter(QObject):
                                     fc, mouse_track, t_ms,
                                     m_left, m_top, m_w, m_h,
                                     c_bgr, c_alpha,
+                                    zoom_keyframes=engine.keyframes,
                                 )
                             if _has_clicks:
                                 draw_clicks_cv(

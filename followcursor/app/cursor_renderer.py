@@ -23,16 +23,157 @@ from PySide6.QtGui import (
 )
 from PySide6.QtSvg import QSvgRenderer
 
-from .models import MousePosition, ClickEvent, ClickEffectPreset, DEFAULT_CLICK_EFFECT
+from .models import MousePosition, ClickEvent, ClickEffectPreset, DEFAULT_CLICK_EFFECT, ZoomKeyframe
+from .zoom_engine import compute_cursor_transition, ease_in_out
 
 logger = logging.getLogger(__name__)
 
 
-# ── Cursor appearance ───────────────────────────────────────────────
+# ── Cursor appearance — blue voxel pointer ──────────────────────────
 
-CURSOR_COLOR = (255, 255, 255)       # white  (RGB for QPainter, BGR for CV)
-CURSOR_OUTLINE = (24, 24, 27)        # soft near-black outline
-CURSOR_SHADOW_ALPHA = 64             # drop shadow opacity (0-255)
+CURSOR_COLOR = (191, 219, 254)         # light blue fill (#bfdbfe)
+CURSOR_OUTLINE = (37, 99, 235)        # vibrant blue border (#2563eb)
+CURSOR_TOP = (147, 197, 253)          # top face highlight (#93c5fd)
+CURSOR_SIDE = (29, 78, 216)            # right depth face (#1d4ed8)
+CURSOR_INNER_SIDE = (59, 130, 246)     # inner cube depth (#3b82f6)
+CURSOR_DEPTH = (30, 58, 138)           # extruded shadow cubes (#1e3a8a)
+CURSOR_SHADOW = (23, 37, 84)           # drop shadow (#172554)
+CURSOR_SHADOW_ALPHA = 72               # drop shadow opacity (0-255)
+
+VOXEL_SIZE = 5                         # pixels per cube face
+_VOXEL_DEPTH = 1                       # depth offset in voxel units
+
+# Stepped arrow mask — tip at top-left (0, 0). Each row is one scanline.
+_VOXEL_ROWS = (
+    "X",
+    "XX",
+    "XXX",
+    "XXXX",
+    "XXXXX",
+    "XXXXXX",
+    "XXXXXXX",
+    "XXXXXXX",
+    "XXX  XX",
+    "XX   XX",
+    "X    XX",
+    "     XX",
+    "     XXX",
+    "      XX",
+)
+
+# Arrow-tip (hotspot) in SVG coordinates
+_TIP_SVG_X, _TIP_SVG_Y = 0.0, 0.0
+_TIP_NX = 0.0
+_TIP_NY = 0.0
+
+
+def _voxel_cells_from_rows(rows: Tuple[str, ...]) -> Tuple[set[tuple[int, int]], int, int]:
+    """Parse a row mask into occupied grid cells and grid dimensions."""
+    width = max(len(row) for row in rows)
+    cells: set[tuple[int, int]] = set()
+    for y, row in enumerate(rows):
+        padded = row.ljust(width)
+        for x, ch in enumerate(padded):
+            if ch not in (" ", "."):
+                cells.add((x, y))
+    return cells, width, len(rows)
+
+
+def _voxel_is_border(x: int, y: int, cells: set[tuple[int, int]]) -> bool:
+    """Return True when a filled cell touches empty space (outline voxel)."""
+    for dx, dy in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+        if (x + dx, y + dy) not in cells:
+            return True
+    return False
+
+
+def _rgb_css(rgb: Tuple[int, int, int], alpha: float = 1.0) -> str:
+    r, g, b = rgb
+    if alpha >= 1.0:
+        return f"rgb({r},{g},{b})"
+    return f"rgba({r},{g},{b},{alpha:.3f})"
+
+
+def _voxel_cube_svg(
+    gx: int,
+    gy: int,
+    size: int,
+    *,
+    top: str,
+    front: str,
+    side: str,
+) -> str:
+    """Render one 3D voxel cube as stacked SVG rects."""
+    x = gx * size
+    y = gy * size
+    face = size - 1
+    side_w = max(1, size // 3 + 1)
+    depth_h = max(1, size // 3 + 1)
+    return (
+        f'<rect x="{x + side_w}" y="{y + depth_h}" width="{face}" height="{face}" fill="{front}"/>'
+        f'<rect x="{x}" y="{y}" width="{face}" height="{face}" fill="{top}"/>'
+        f'<rect x="{x + face}" y="{y + 1}" width="{side_w}" height="{face}" fill="{side}"/>'
+        f'<rect x="{x + 1}" y="{y + face}" width="{face}" height="{depth_h}" fill="{side}"/>'
+    )
+
+
+def _build_cursor_svg() -> bytes:
+    """Assemble a blue voxel cursor SVG with depth and a soft drop shadow."""
+    cells, grid_w, grid_h = _voxel_cells_from_rows(_VOXEL_ROWS)
+    size = VOXEL_SIZE
+    depth_px = _VOXEL_DEPTH * size
+
+    body_w = grid_w * size + depth_px
+    body_h = grid_h * size + depth_px
+    shadow_off = max(2, size // 2)
+    vb_w = body_w + shadow_off
+    vb_h = body_h + shadow_off
+
+    global _VB_X, _VB_Y, _VB_W, _VB_H, _ARROW_FRAC
+    _VB_X, _VB_Y = _TIP_SVG_X, _TIP_SVG_Y
+    _VB_W, _VB_H = float(vb_w), float(vb_h)
+    _ARROW_FRAC = body_h / vb_h
+
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{_VB_X} {_VB_Y} {_VB_W} {_VB_H}">',
+    ]
+
+    shadow_fill = _rgb_css(CURSOR_SHADOW, CURSOR_SHADOW_ALPHA / 255.0)
+    for gx, gy in sorted(cells, key=lambda c: (c[1], c[0])):
+        sx = gx * size + shadow_off
+        sy = gy * size + shadow_off
+        parts.append(
+            f'<rect x="{sx}" y="{sy}" width="{size}" height="{size}" fill="{shadow_fill}"/>'
+        )
+
+    depth_fill = _rgb_css(CURSOR_DEPTH)
+    for gx, gy in sorted(cells, key=lambda c: (c[0] + c[1], c[1], c[0])):
+        parts.append(
+            f'<rect x="{(gx + _VOXEL_DEPTH) * size}" y="{(gy + _VOXEL_DEPTH) * size}"'
+            f' width="{size}" height="{size}" fill="{depth_fill}"/>'
+        )
+
+    for gx, gy in sorted(cells, key=lambda c: (c[0] + c[1], c[1], c[0])):
+        border = _voxel_is_border(gx, gy, cells)
+        top = _rgb_css(CURSOR_OUTLINE if border else CURSOR_TOP)
+        front = _rgb_css(CURSOR_OUTLINE if border else CURSOR_COLOR, 0.94 if not border else 1.0)
+        side = _rgb_css(CURSOR_SIDE if border else CURSOR_INNER_SIDE)
+        parts.append(_voxel_cube_svg(gx, gy, size, top=top, front=front, side=side))
+
+    parts.append("</svg>")
+    return "".join(parts).encode("utf-8")
+
+
+_CURSOR_SVG_BYTES: bytes = _build_cursor_svg()
+_cached_renderer: Optional[QSvgRenderer] = None
+
+
+def _get_renderer() -> QSvgRenderer:
+    """Return a module-cached QSvgRenderer (created lazily)."""
+    global _cached_renderer
+    if _cached_renderer is None:
+        _cached_renderer = QSvgRenderer(QByteArray(_CURSOR_SVG_BYTES))
+    return _cached_renderer
 
 # ── Click effect appearance ─────────────────────────────────────────
 
@@ -131,86 +272,92 @@ def _interp_mouse_smooth(
     return weighted_x / total_weight, weighted_y / total_weight
 
 
-# ── SVG cursor shape ────────────────────────────────────────────────
-# Pointer arrow defined as two SVG sub-paths. The outer silhouette provides
-# the dark border; the inner shape is filled white. The viewBox starts at the
-# hotspot so preview and export align the arrow tip exactly to the cursor.
-_SVG_PATH_OUTER = (
-    "M0 0"
-    "L0 58"
-    "Q0 62 3 64"
-    "Q6 66 9 63"
-    "L21 51"
-    "L29 70"
-    "Q31 75 36 73"
-    "L48 68"
-    "Q53 66 51 61"
-    "L43 43"
-    "H58"
-    "Q62 43 64 40"
-    "Q65 36 62 33"
-    "Z"
-)
-
-_SVG_PATH_INNER = (
-    "M6 11"
-    "L6 52"
-    "L22 37"
-    "L34 65"
-    "L44 61"
-    "L32 34"
-    "H52"
-    "Z"
-)
-
-# Shadow offset in SVG-space units.
-_SHADOW_OFF_X = 3.0
-_SHADOW_OFF_Y = 4.0
-
-# Arrow-tip (hotspot) in SVG coordinates
-_TIP_SVG_X, _TIP_SVG_Y = 0.0, 0.0
-
-# ViewBox starts exactly at the arrow tip so the hotspot is at the rendered
-# image origin (top-left = pixel 0,0).
-_VB_X, _VB_Y = _TIP_SVG_X, _TIP_SVG_Y  # tip at viewBox origin
-_VB_W, _VB_H = 70.0, 82.0
-
-# Hotspot normalised to viewBox (0-1) — exactly zero because the tip
-# IS the viewBox origin.
-_TIP_NX = 0.0
-_TIP_NY = 0.0
-
-# Fraction of viewBox height occupied by the arrow (tip to bottom)
-_ARROW_FRAC = 74.0 / _VB_H
+# ── Zoom transition cursor flair ────────────────────────────────────
 
 
-def _build_cursor_svg() -> bytes:
-    """Assemble the cursor SVG with shadow, outline, and fill layers."""
-    ol = f"rgb({CURSOR_OUTLINE[0]},{CURSOR_OUTLINE[1]},{CURSOR_OUTLINE[2]})"
-    fl = f"rgb({CURSOR_COLOR[0]},{CURSOR_COLOR[1]},{CURSOR_COLOR[2]})"
-    sa = f"{CURSOR_SHADOW_ALPHA / 255:.3f}"
-    return (
-        f'<svg xmlns="http://www.w3.org/2000/svg"'
-        f' viewBox="{_VB_X} {_VB_Y} {_VB_W} {_VB_H}">'
-        f'<path fill="black" fill-opacity="{sa}"'
-        f' transform="translate({_SHADOW_OFF_X},{_SHADOW_OFF_Y})"'
-        f' d="{_SVG_PATH_OUTER}"/>'
-        f'<path fill="{ol}" d="{_SVG_PATH_OUTER}"/>'
-        f'<path fill="{fl}" d="{_SVG_PATH_INNER}"/>'
-        f'</svg>'
-    ).encode("utf-8")
+def _cursor_transition_transform(
+    phase: Optional[str],
+    progress: float,
+    cursor_size: float,
+) -> Tuple[float, float, float, float, float]:
+    """Map a zoom transition to cursor transform around the hotspot.
+
+    Returns ``(scale_x, scale_y, rotation_deg, offset_x, offset_y)``.
+    Enter transitions flip horizontally; exit transitions wave/wiggle.
+    """
+    if not phase or progress >= 1.0:
+        return 1.0, 1.0, 0.0, 0.0, 0.0
+
+    t = ease_in_out(progress)
+
+    if phase == "enter":
+        scale_x = math.cos(math.pi * t)
+        return scale_x, 1.0, 0.0, 0.0, 0.0
+
+    if phase == "exit":
+        fade = 1.0 - t
+        wave = math.sin(t * math.pi * 3.0) * fade
+        rot = wave * 18.0
+        offset_y = wave * cursor_size * 0.12
+        offset_x = math.sin(t * math.pi * 2.0) * cursor_size * 0.06 * fade
+        return 1.0, 1.0, rot, offset_x, offset_y
+
+    return 1.0, 1.0, 0.0, 0.0, 0.0
 
 
-_CURSOR_SVG_BYTES: bytes = _build_cursor_svg()
-_cached_renderer: Optional[QSvgRenderer] = None
+def _warp_cursor_sprite(
+    cursor_bgr: np.ndarray,
+    cursor_alpha: np.ndarray,
+    scale_x: float,
+    scale_y: float,
+    rotation_deg: float,
+    offset_x: float,
+    offset_y: float,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Affine-transform a cursor sprite keeping the hotspot at the top-left."""
+    h, w = cursor_bgr.shape[:2]
+    angle = math.radians(rotation_deg)
+    cos_a = math.cos(angle)
+    sin_a = math.sin(angle)
 
+    a = scale_x * cos_a
+    b = scale_x * (-sin_a)
+    d = scale_y * sin_a
+    e = scale_y * cos_a
 
-def _get_renderer() -> QSvgRenderer:
-    """Return a module-cached QSvgRenderer (created lazily)."""
-    global _cached_renderer
-    if _cached_renderer is None:
-        _cached_renderer = QSvgRenderer(QByteArray(_CURSOR_SVG_BYTES))
-    return _cached_renderer
+    corners = np.array(
+        [[0, 0, 1], [w, 0, 1], [0, h, 1], [w, h, 1]],
+        dtype=np.float32,
+    )
+    m = np.array([[a, b, offset_x], [d, e, offset_y]], dtype=np.float32)
+    transformed = corners @ m.T
+    min_x = float(np.min(transformed[:, 0]))
+    min_y = float(np.min(transformed[:, 1]))
+    max_x = float(np.max(transformed[:, 0]))
+    max_y = float(np.max(transformed[:, 1]))
+
+    m[0, 2] -= min_x
+    m[1, 2] -= min_y
+    out_w = max(1, int(math.ceil(max_x - min_x)))
+    out_h = max(1, int(math.ceil(max_y - min_y)))
+
+    warped_bgr = cv2.warpAffine(
+        cursor_bgr,
+        m,
+        (out_w, out_h),
+        flags=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=(0, 0, 0),
+    )
+    warped_alpha = cv2.warpAffine(
+        cursor_alpha,
+        m,
+        (out_w, out_h),
+        flags=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=0,
+    )
+    return warped_bgr, warped_alpha
 
 
 # ── QPainter-based cursor (for live preview) ───────────────────────
@@ -225,6 +372,7 @@ def draw_cursor_qpainter(
     screen_rect_y: float,
     screen_rect_w: float,
     screen_rect_h: float,
+    zoom_keyframes: Optional[List[ZoomKeyframe]] = None,
 ) -> None:
     """Draw a cursor on the preview compositor's screen area.
 
@@ -263,8 +411,24 @@ def draw_cursor_qpainter(
     # Position SVG so the arrow tip aligns with (px, py)
     target = QRectF(px - hx, py - hy, render_w, render_h)
 
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    phase, progress = compute_cursor_transition(zoom_keyframes or [], time_ms)
+    scale_x, scale_y, rot, off_x, off_y = _cursor_transition_transform(
+        phase, progress, cs,
+    )
+
+    painter.save()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
+    if phase:
+        painter.translate(px, py)
+        if phase == "enter":
+            painter.scale(scale_x, scale_y)
+        else:
+            painter.rotate(rot)
+            painter.translate(off_x, off_y)
+        painter.translate(-px, -py)
     _get_renderer().render(painter, target)
+    painter.restore()
 
 
 # ── OpenCV/numpy-based cursor (for export) ─────────────────────────
@@ -291,7 +455,8 @@ def _build_cursor_template(height: int) -> Tuple[np.ndarray, np.ndarray]:
     img = QImage(render_w, render_h, QImage.Format.Format_ARGB32)
     img.fill(Qt.GlobalColor.transparent)
     p = QPainter(img)
-    p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+    p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
     renderer.render(p)
     p.end()
 
@@ -329,6 +494,7 @@ def draw_cursor_cv(
     mon_h: int,
     cursor_bgr: np.ndarray,
     cursor_alpha: np.ndarray,
+    zoom_keyframes: Optional[List[ZoomKeyframe]] = None,
 ) -> None:
     """Draw cursor onto *frame_bgr* in-place.
 
@@ -341,7 +507,25 @@ def draw_cursor_cv(
 
     mx, my = pos
     fh, fw = frame_bgr.shape[:2]
-    ch, cw = cursor_bgr.shape[:2]
+
+    phase, progress = compute_cursor_transition(zoom_keyframes or [], time_ms)
+    scale_x, scale_y, rot, off_x, off_y = _cursor_transition_transform(
+        phase, progress, float(cursor_bgr.shape[0]),
+    )
+    sprite_bgr = cursor_bgr
+    sprite_alpha = cursor_alpha
+    if phase:
+        sprite_bgr, sprite_alpha = _warp_cursor_sprite(
+            cursor_bgr,
+            cursor_alpha,
+            scale_x,
+            scale_y,
+            rot,
+            off_x,
+            off_y,
+        )
+
+    ch, cw = sprite_bgr.shape[:2]
 
     # Position in frame pixels
     px = int((mx - mon_left) / max(mon_w, 1) * fw)
@@ -365,8 +549,8 @@ def draw_cursor_cv(
         return
 
     roi = frame_bgr[y1:y2, x1:x2]
-    c_roi = cursor_bgr[src_y1:src_y2, src_x1:src_x2]
-    a_roi = cursor_alpha[src_y1:src_y2, src_x1:src_x2]
+    c_roi = sprite_bgr[src_y1:src_y2, src_x1:src_x2]
+    a_roi = sprite_alpha[src_y1:src_y2, src_x1:src_x2]
 
     alpha = a_roi[:, :, np.newaxis].astype(np.float32) / 255.0
     blended = (c_roi.astype(np.float32) * alpha + roi.astype(np.float32) * (1 - alpha))

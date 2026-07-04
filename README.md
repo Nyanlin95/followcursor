@@ -1,4 +1,6 @@
-# FollowCursor [![Build](https://github.com/sabbour/followcursor/actions/workflows/build.yml/badge.svg)](https://github.com/sabbour/followcursor/actions/workflows/build.yml)
+# FollowCursor
+
+> **Fork notice:** This clone tracks **[Nyanlin95/followcursor](https://github.com/Nyanlin95/followcursor)** — a personal fork of the upstream project **[sabbour/followcursor](https://github.com/sabbour/followcursor)**. See **[Fork lineage & custom changes](docs/FORK.md)** for what is original vs. fork-specific (voxel cursor, zoom transition flair, UI layout fixes).
 
 A Windows screen recorder with cinematic cursor-following zoom — built with **Python** and **PySide6 (Qt 6)**.
 
@@ -19,6 +21,7 @@ Record your screen or any individual window, then export a polished MP4 video wh
 | [Quickstart Guide](docs/QUICKSTART.md) | Install, record, edit, export — step by step |
 | [Architecture Guide](docs/ARCHITECTURE.md) | How the codebase works: data flow, zoom engine, capture pipeline |
 | [Contributing Guide](docs/CONTRIBUTING.md) | Dev setup, coding conventions, release process |
+| [Fork lineage](docs/FORK.md) | Upstream vs. this fork — remotes, custom changes, where to report issues |
 
 ## Features
 
@@ -34,6 +37,7 @@ Record your screen or any individual window, then export a polished MP4 video wh
 ### 🔍 Zoom & Pan
 
 - **Smart Auto-Zoom** — Automatically detects mouse settlements, typing bursts, and click clusters to generate zoom keyframes with configurable sensitivity (Low / Medium / High). Spatial-aware clustering merges nearby same-area events into sustained zooms, and consecutive clusters are chained together (up to 4 per chain) — the camera stays zoomed in and pans smoothly between them instead of zooming out and back in
+- **Cursor transition flair** *(fork)* — Blue voxel pointer **flips** during zoom-in and **waves** during zoom-out; stays normal while fully zoomed. See [docs/FORK.md](docs/FORK.md)
 - **Manual Zoom Keyframes** — Right-click the timeline or preview to add zoom points; drag segments to reposition them
 - **Zoom Depth Control** — Right-click a zoom segment to set depth (Subtle 1.25×, Medium 1.5×, Close 2×, Detail 2.5×)
 - **Centroid Editing** — Reposition the pan center of any zoom keyframe by clicking "Set centroid" on a zoom segment, then clicking the target point on the preview
@@ -189,7 +193,7 @@ followcursor/
 │   ├── window_utils.py              # Win32 window enumeration & PrintWindow
 │   ├── video_exporter.py            # H.264 MP4 export with zoom & cursor
 │   ├── compositor.py                # QPainter compositing (frame + background)
-│   ├── cursor_renderer.py           # Arrow cursor + click ripple rendering
+│   ├── cursor_renderer.py           # Voxel cursor + zoom transition flair + click effects
 │   ├── global_hotkeys.py            # Win32 RegisterHotKey via QThread
 │   ├── backgrounds.py               # 84 background presets (solids, gradients, patterns)
 │   ├── frames.py                    # 5 device frame presets

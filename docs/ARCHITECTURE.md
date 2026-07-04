@@ -374,14 +374,14 @@ Python `logging` module. Format: `%(name)s | %(levelname)s | %(message)s`. `Rota
 | `app/video_exporter.py` | H.264/GIF export with zoom/cursor |
 | `app/compositor.py` | QPainter compositing for preview |
 | `app/utils.py` | Helper functions for video/image processing |
-| `app/zoom_engine.py` | Keyframe interpolation + undo/redo |
+| `app/zoom_engine.py` | Keyframe interpolation, undo/redo, `compute_cursor_transition()` |
 | `app/activity_analyzer.py` | Auto-zoom from activity |
 | `app/ai_service.py` | AI zoom, multimodal narration, and TTS voiceover |
 | `app/credentials.py` | DPAPI credential encryption |
 | `app/mouse_tracker.py` | 60 Hz cursor polling |
 | `app/keyboard_tracker.py` | Legacy no-op compatibility stub for removed keystrokes |
 | `app/click_tracker.py` | Win32 mouse click hook |
-| `app/cursor_renderer.py` | Arrow cursor + click effects |
+| `app/cursor_renderer.py` | Voxel cursor, zoom enter/exit flair, click effects |
 | `app/global_hotkeys.py` | Win32 RegisterHotKey |
 | `app/window_utils.py` | Win32 window enumeration |
 | `app/backgrounds.py` | 84 background presets |

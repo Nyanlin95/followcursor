@@ -10,6 +10,7 @@ from app.zoom_engine import (
     MAX_UNDO,
     mouse_pan_at_time,
     clamp_pan_for_zoom,
+    compute_cursor_transition,
 )
 from app.models import ClickEvent, MousePosition, ZoomKeyframe
 
@@ -607,3 +608,41 @@ class TestComputeOutputDurationSpeedGuard:
         engine.add_keyframe(ZoomKeyframe.create(timestamp=1000, zoom=1.0, duration=400))
         result = engine.compute_output_duration(2000.0)
         assert result == pytest.approx(2000.0)
+
+
+class TestCursorTransition:
+    def test_enter_during_zoom_in(self) -> None:
+        kfs = [
+            ZoomKeyframe.create(timestamp=0, zoom=2.0, duration=600),
+            ZoomKeyframe.create(timestamp=3000, zoom=1.0, duration=600),
+        ]
+        phase, progress = compute_cursor_transition(kfs, 300)
+        assert phase == "enter"
+        assert 0.0 < progress < 1.0
+
+    def test_exit_during_zoom_out(self) -> None:
+        kfs = [
+            ZoomKeyframe.create(timestamp=0, zoom=2.0, duration=200),
+            ZoomKeyframe.create(timestamp=3000, zoom=1.0, duration=600),
+        ]
+        phase, progress = compute_cursor_transition(kfs, 3300)
+        assert phase == "exit"
+        assert 0.0 < progress < 1.0
+
+    def test_steady_zoom_has_no_flair(self) -> None:
+        kfs = [
+            ZoomKeyframe.create(timestamp=0, zoom=2.0, duration=600),
+            ZoomKeyframe.create(timestamp=3000, zoom=1.0, duration=600),
+        ]
+        assert compute_cursor_transition(kfs, 1500) == (None, 0.0)
+        assert compute_cursor_transition(kfs, 700) == (None, 0.0)
+        assert compute_cursor_transition(kfs, 3900) == (None, 0.0)
+
+    def test_enter_and_exit_never_overlap(self) -> None:
+        kfs = [
+            ZoomKeyframe.create(timestamp=0, zoom=2.0, duration=600),
+            ZoomKeyframe.create(timestamp=3000, zoom=1.0, duration=600),
+        ]
+        for t in range(0, 4000, 25):
+            phase, _ = compute_cursor_transition(kfs, float(t))
+            assert phase in (None, "enter", "exit")

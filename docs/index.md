@@ -1,5 +1,7 @@
 # FollowCursor
 
+> **Fork:** Docs for the [Nyanlin95](https://github.com/Nyanlin95/followcursor) fork. Upstream: [sabbour/followcursor](https://github.com/sabbour/followcursor). Custom scope: [FORK.md](FORK.md).
+
 **A Windows screen recorder with cinematic cursor-following zoom.**
 
 Record your screen or any individual window, then export a polished MP4 or GIF where the camera smoothly follows and zooms into your cursor movements. Perfect for tutorials, demos, and product walkthroughs.
